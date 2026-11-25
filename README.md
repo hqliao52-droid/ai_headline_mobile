@@ -1,4 +1,4 @@
-# AI 资讯 · sea_platform_web
+# AI 资讯
 
 基于 **uni-app (Vue 2)** 的跨端资讯 App，提供新闻信息流、AI 智能问答、个性化推送与阅读历史。
 
@@ -99,8 +99,8 @@
 
 ```bash
 # 1. 克隆仓库
-git clone <repo-url> sea_platform_web
-cd sea_platform_web
+git clone <repo-url> ai_headline_mobile
+cd ai_headline_mobile
 
 # 2. 安装依赖（必须，否则无法编译）
 npm install

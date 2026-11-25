@@ -1,7 +1,7 @@
 // utils/chat-socket.js
 // 聊天流式输出：对接后端 /chatMessage/ws/chat_with_ai
 //
-// 协议（见 sea_platform/app/api/chat_message_api.py 的 ws_chat_with_ai +
+// 协议（见 ai_headline_mobile/app/api/chat_message_api.py 的 ws_chat_with_ai +
 //       app/services/ai_service.py 的 websocket_stream）：
 //   1. 连接建立后，客户端先发一条 ChatMsg：
 //        { query, user_id, session_id, news_ids, files }
