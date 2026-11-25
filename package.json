@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "config:sync": "node scripts/sync-server-config.js",
+    "config:check": "node scripts/sync-server-config.js --check",
+    "backend:check": "node scripts/check-backend.js"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "mermaid": "^11.14.0",
+    "uview-ui": "^2.0.38"
+  }
+}

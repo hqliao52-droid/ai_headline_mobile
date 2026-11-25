@@ -1,0 +1,59 @@
+#  依赖 
+node_modules/
+
+# uni_modules
+uni_modules/
+
+#  编译 / 打包产物 
+dist/
+build/
+unpackage/
+*.egg-info/
+
+#  IDE / 编辑器 
+.hbuilderx/
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+#  环境变量 
+.env
+.env.local
+.env.*.local
+
+#  签名与私钥 
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+
+#  Python（scripts/ 下可能用到）
+*.pyc
+*.pyo
+__pycache__/
+venv/
+env/
+.venv
+
+#  测试 
+.pytest_cache/
+.coverage
+htmlcov/
+
+#  日志 
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+#  系统文件 
+.DS_Store
+Thumbs.db
+desktop.ini
+
+#  临时目录 
+.tmp_proto/
