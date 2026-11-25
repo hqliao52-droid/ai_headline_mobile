@@ -1,25 +1,56 @@
+// 设计变量：颜色只有三档文字 + 两档底色—
+$brand: #2981f0; // 品牌宝蓝：选中、按钮、链接、强调
+$brand-bright: #3a7ce4; // Banner 渐变起点
+$brand-deep: #1e5fc4; // Banner 渐变终点
+$page-bg: #f6f8fc; // 页面冷调浅灰白
+$card-bg: #ffffff; // 卡片纯白
+$fill-search: #f4f7fc; // 搜索框极浅蓝灰
+$fill-soft: #f1f5fb; // 浅灰蓝：分类未选中 / AI 摘要块
+$fill-tag: #eef2f7; // 浅灰：普通标签
+$text-title: #16202e; // 近黑深蓝灰：标题
+$text-body: #5a6b82; // 次级灰蓝：说明
+$text-muted: #9aa8bd; // 浅灰：时间 / 占位
+$line: #eef2f8; // 极浅分隔线
+$radius-card: 32rpx; // 16px 卡片圆角
+$shadow-card: 0 4rpx 16rpx rgba(22, 32, 46, 0.05); // 柔和浅灰投影
+$shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
+
+// 分类名浮层的淡入动画（transform 里必须带上 translateX(-50%)，否则会横向跳一下）
+@keyframes category-tip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .container {
   min-height: 100vh;
-  // 整页统一白底（头部同为白色）
-  background-color: #ffffff;
+  // 页面底色：冷调浅灰白，白色卡片浮在上面
+  background-color: $page-bg;
   padding-bottom: 120rpx;
 
-  // 顶部头部：吸顶。滚动时问候语收起、搜索框上移，标题和头像保持不动
+  // 顶部头部：白底吸顶。滚动时问候语收起、搜索框上移，标题和头像保持不动
   .page-header {
     // 左右留 20rpx：搜索框与屏幕边缘的间距
     padding: 0 20rpx 30rpx;
     // 与 ai-chat 页保持一致，用 --status-bar-height 适配状态栏
     padding-top: var(--status-bar-height);
-    background-color: #ffffff;
+    // 头部作为一块白色「导航区」，与下方灰色页面分层
+    background-color: $card-bg;
     // sticky 会保留文档流占位，吸顶后内容不会跳到顶部
     position: sticky;
     top: 0;
     z-index: 998;
     transition: box-shadow 0.2s ease;
 
-    // 白底吸顶后，靠阴影和下面的内容区分开
+    // 吸顶后：一条极浅分隔线 + 一层淡蓝阴影，和下面的内容分开
+    // （用 box-shadow 画线，不会像 border 那样把头部撑高 1rpx）
     &.is-scrolled {
-      box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.06);
+      box-shadow: 0 1rpx 0 $line, 0 8rpx 24rpx rgba(30, 95, 196, 0.08);
     }
 
     // 文字区再缩进 20rpx，标题/问候语与搜索框左边缘错开（对齐原型）
@@ -35,18 +66,20 @@
       min-width: 0;
     }
 
+    // 【推荐】页面大标题
     .header-title {
       font-size: 42rpx;
       font-weight: 700;
-      color: #0a0a0a;
+      color: $text-title;
       line-height: 1.2;
     }
 
-    // 高度和透明度由 JS 按滚动进度驱动，这里只固定排版细节
+    // 问候语：高度和透明度由 JS 按滚动进度驱动，这里只固定排版细节。
+    // 行高写死 36rpx，必须等于 JS 里的 uni.upx2px(36)，否则收起时会露半行字
     .header-greeting {
-      font-size: 24rpx;
-      color: #6a6867;
-      line-height: 1.5;
+      font-size: 26rpx;
+      color: $text-body;
+      line-height: 36rpx;
       overflow: hidden;
     }
 
@@ -76,16 +109,17 @@
         opacity: 0.7;
       }
 
+      // 头像：白色圆角方块底 + 浅蓝内胆（有真实头像时由图片盖住）
       .avatar-circle {
         position: relative;
         width: 48rpx;
         height: 48rpx;
-        border-radius: 50%;
+        border-radius: 16rpx;
         overflow: hidden;
-        background-color: #9e9b9e;
+        background-color: #eaf2fe;
         flex-shrink: 0;
 
-        // 未登录时的灰色人像占位（头部）
+        // 未登录时的品牌蓝人像占位（头部）
         &::before {
           content: '';
           position: absolute;
@@ -95,10 +129,10 @@
           height: 16rpx;
           margin-left: -8rpx;
           border-radius: 50%;
-          background-color: #dcdcde;
+          background-color: $brand;
         }
 
-        // 未登录时的灰色人像占位（肩部）
+        // 未登录时的品牌蓝人像占位（肩部）
         &::after {
           content: '';
           position: absolute;
@@ -108,7 +142,7 @@
           height: 31rpx;
           margin-left: -15.5rpx;
           border-radius: 50%;
-          background-color: #dcdcde;
+          background-color: $brand;
         }
 
         .avatar-img {
@@ -126,7 +160,7 @@
         margin-left: 10rpx;
         max-width: 130rpx;
         font-size: 24rpx;
-        color: #6a6867;
+        color: $text-body;
         line-height: 1.3;
         overflow: hidden;
         white-space: nowrap;
@@ -140,15 +174,24 @@
       height: 76rpx;
       // margin-top / margin-bottom / transform 由 JS 按滚动进度驱动
       padding: 0 26rpx;
-      background-color: #eaeaec;
-      border-radius: 38rpx;
+      // 极浅蓝灰底 + 大圆角矩形（12px），无描边
+      background-color: $fill-search;
+      border-radius: 24rpx;
+      // 透明描边常驻，聚焦时只换颜色，不产生任何尺寸跳动
+      border: 2rpx solid transparent;
       box-sizing: border-box;
       // 以左中为原点缩放：左侧位置稳定，垂直中心保持不动
       transform-origin: left center;
       will-change: transform;
 
       &:active {
-        background-color: #e2e2e6;
+        background-color: #eaf0f9;
+      }
+
+      // 聚焦时出现品牌蓝细边框
+      &.is-focused {
+        border-color: $brand;
+        background-color: $card-bg;
       }
 
       // 放大镜用纯 CSS 画，避免依赖图标字体
@@ -167,7 +210,7 @@
           left: 0;
           width: 26rpx;
           height: 26rpx;
-          border: 4rpx solid #3b3b3d;
+          border: 4rpx solid $brand;
           border-radius: 50%;
           box-sizing: border-box;
         }
@@ -181,7 +224,7 @@
           width: 10rpx;
           height: 4rpx;
           border-radius: 2rpx;
-          background-color: #3b3b3d;
+          background-color: $brand;
           transform-origin: 0 50%;
           transform: rotate(45deg);
         }
@@ -202,7 +245,7 @@
         min-width: 0;
         height: 100%;
         font-size: 28rpx;
-        color: #333333;
+        color: $text-title;
         background-color: transparent;
         border: none;
         outline: none;
@@ -210,27 +253,32 @@
     }
   }
 
+  // 今日热词概览
   .hot-section {
-    padding: 30rpx;
+    padding: 32rpx 30rpx 8rpx;
 
     .section-title {
       display: flex;
       align-items: center;
       margin-bottom: 20rpx;
 
+      // 标题前的小箭头 icon：品牌蓝
       .title-icon {
-        font-size: 32rpx;
-        color: #007aff;
+        font-size: 30rpx;
+        line-height: 1.2;
+        font-weight: 700;
+        color: $brand;
         margin-right: 10rpx;
       }
 
       .title-text {
-        font-size: 34rpx;
-        font-weight: 600;
-        color: #000;
+        font-size: 36rpx;
+        font-weight: 700;
+        color: $text-title;
       }
     }
 
+    // 热词标签：统一胶囊圆角，浅底 + 同色系深字
     .hot-tags {
       display: flex;
       flex-wrap: wrap;
@@ -239,26 +287,31 @@
       .tag {
         padding: 12rpx 24rpx;
         border-radius: 40rpx;
-        font-size: 28rpx;
+        font-size: 26rpx;
+        line-height: 1.2;
 
+        // 品牌 / 信息类
         &.tag-blue {
-          background-color: #e6f0ff;
-          color: #007aff;
+          background-color: #eaf2fe;
+          color: $brand;
         }
 
-        &.tag-red {
-          background-color: #ffe6e6;
-          color: #ff4d4f;
+        // 政策 / 物流类
+        &.tag-orange {
+          background-color: #fdf0e5;
+          color: #e8742a;
         }
 
+        // 平台 / 渠道类
         &.tag-green {
-          background-color: #e6f7e6;
-          color: #52c41a;
+          background-color: #e7f6ef;
+          color: #1fa36e;
         }
 
+        // 普通类
         &.tag-normal {
-          background-color: #f5f5f5;
-          color: #666;
+          background-color: $fill-tag;
+          color: $text-body;
         }
       }
     }
@@ -270,43 +323,171 @@
   .category-head {
     display: flex;
     align-items: center;
-    padding: 12rpx 30rpx;
+    padding: 16rpx 30rpx;
     position: sticky;
     // 头部收起后的高度 = 状态栏 + 15rpx 行内边距 + 42rpx×1.2 标题行 + 30rpx 下内边距
     // （收起时问候语高度为 0，搜索框上下外边距互相抵消，不再占高度）
     top: calc(var(--status-bar-height, 0px) + 96rpx);
     // 必须高于头部(998)，否则会滑到头部底下去
     z-index: 999;
-    // 下方内容会从标题底下滚过去，用底色挡住
-    background-color: #ffffff;
+    // 下方内容会从标题底下滚过去，用页面同色底挡住（视觉上等于透明）
+    background-color: $page-bg;
   }
 
   .category-head-title {
     flex-shrink: 0;
-    font-size: 32rpx;
-    font-weight: 600;
-    color: #333;
+    font-size: 36rpx;
+    font-weight: 700;
+    color: $text-title;
   }
 
-  // 标题右侧的当前分类：淡蓝底小胶囊，和下面的分类标签区分开（那只是“可点选项”）
-  .category-current {
-    // 名字过长时省略，不把右侧“展开”按钮挤掉
-    max-width: 300rpx;
+  // 当前分类切换器：‹ 科技与数字服务 ›
+  .category-switcher {
+    display: flex;
+    align-items: center;
+    // 6px = 12rpx：箭头紧贴胶囊两侧
+    gap: 12rpx;
     margin-left: 16rpx;
-    padding: 4rpx 16rpx;
+    // 分类名过长时由胶囊自己省略，整组不把右侧“展开”挤掉
+    min-width: 0;
+    // 浮层相对这里定位，正好落在胶囊下方居中
+    position: relative;
+  }
+
+  // 左右箭头：32px 圆形按钮，直径与胶囊高度一致
+  .switch-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64rpx;
+    height: 64rpx;
+    border-radius: 50%;
+    background-color: $fill-soft;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease;
+
+    // 按压态：底色变浅蓝、箭头变品牌蓝
+    &:active {
+      background-color: #eaf2fe;
+    }
+
+    // 首 / 尾时置灰：只淡化箭头，保留底圆，否则底色淡到看不见、两侧不对称
+    // 仍可点但不做任何事（避免点击穿透到标题的“回到开头”）
+    &.is-disabled {
+      .arrow-glyph {
+        border-color: $text-muted;
+        opacity: 0.5;
+      }
+    }
+  }
+
+  // 线性箭头：用右 / 下两条边框拼一个 chevron
+  // 注意：0° 时顶点朝「右下」(45°)，所以左右箭头要在此基础上各转 -45° / +135°
+  .arrow-glyph {
+    width: 14rpx;
+    height: 14rpx;
+    border-right: 3rpx solid $text-body;
+    border-bottom: 3rpx solid $text-body;
+    transition: border-color 0.15s ease;
+  }
+
+  // 往左指：45° + 135° = 180°
+  .arrow-left {
+    transform: rotate(135deg);
+  }
+
+  // 往右指：45° - 45° = 0°
+  .arrow-right {
+    transform: rotate(-45deg);
+  }
+
+  // 按压时箭头跟着变蓝
+  .switch-arrow:active .arrow-glyph {
+    border-color: $brand;
+  }
+
+  // 当前选中的分类胶囊：高度与箭头对齐，宽度固定为 5 个字，避免切换时整组左右抖动
+  .category-current {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    // 高度对齐 32px 的箭头，整组垂直居中
+    height: 64rpx;
+    padding: 0 16rpx;
+    box-sizing: border-box;
+    // 固定宽度 = 5 个汉字宽（26rpx × 5）+ 左右内边距 32rpx = 162rpx。
+    // 不用 calc()：小程序端 calc 里混 rpx 兼容性不稳，直接写死更保险
+    width: 162rpx;
+    flex: 0 0 auto;
+    border-radius: 12rpx;
+    font-size: 26rpx;
+    color: $brand;
+    background-color: #eaf2fe;
+
+    .current-text {
+      // 超过 5 个字就省略，宽度锁死
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    // 选中的是“全部”时保持原始灰色，只有选了具体分类才变蓝
+    &.is-all {
+      color: $text-body;
+      background-color: $fill-tag;
+    }
+  }
+
+  // 名字被截断时的完整名称浮层：深色气泡 + 上方小三角，1s 后由 JS 收起
+  // 相当于网页端的 hover tooltip，移动端用「切换后自动浮出 + 点胶囊唤起」替代
+  .category-tip {
+    position: absolute;
+    // 紧贴胶囊下方：切换器高 64rpx（= 箭头直径），再留 8rpx 间距。
+    // 不用 calc()——小程序端 calc 里混 rpx 兼容性不稳
+    top: 72rpx;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    padding: 10rpx 16rpx;
     border-radius: 8rpx;
+    // 用实色深灰而不是半透明：半透明会让下方分类标签的字透上来，看着很脏
+    background-color: #333333;
+    color: #ffffff;
     font-size: 24rpx;
     line-height: 1.4;
-    color: #007aff;
-    background-color: #eaf3ff;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.15);
+    // 淡入一下，避免硬闪
+    animation: category-tip-in 0.15s ease-out;
+    // 纯展示，不吃点击，别挡住下面的分类标签
+    pointer-events: none;
+    // 注意：这里绝不能写 overflow: hidden——会把上方那个 ::before 小三角一起裁掉，
+    // 省略号交给内层的 .tip-text 处理
 
-    // 选中的是“全部”时弱化一点，避免看起来像有筛选条件
-    &.is-all {
-      color: #8a8a8e;
-      background-color: #f2f2f4;
+    // 内层文字负责单行 + 超长省略
+    .tip-text {
+      display: block;
+      // 单行不换行——断成两三行的气泡比省略号还难读
+      white-space: nowrap;
+      // 极端长名字兜底：宁可省略也别横向撑出屏幕
+      max-width: 600rpx;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    // 上方小三角：用 border 拼一个朝上的箭头，对准胶囊中心
+    &::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-style: solid;
+      // 上 0 / 右 10 / 下 10 / 左 10 → 朝上的三角
+      border-width: 0 10rpx 10rpx 10rpx;
+      border-color: transparent transparent #333333 transparent;
     }
   }
 
@@ -324,7 +505,7 @@
 
     .toggle-text {
       font-size: 26rpx;
-      color: #007aff;
+      color: $brand;
       line-height: 1;
     }
 
@@ -334,8 +515,8 @@
       height: 12rpx;
       margin-left: 10rpx;
       margin-top: -6rpx;
-      border-right: 3rpx solid #007aff;
-      border-bottom: 3rpx solid #007aff;
+      border-right: 3rpx solid $brand;
+      border-bottom: 3rpx solid $brand;
       transform: rotate(45deg);
       transition: transform 0.7s ease, margin-top 0.7s ease;
 
@@ -365,10 +546,10 @@
 
     .category-item {
       padding: 16rpx 32rpx;
-      border-radius: 16rpx;
+      border-radius: 40rpx;
       font-size: 30rpx;
-      color: #666;
-      background-color: #f5f5f5;
+      color: $text-title;
+      background-color: $fill-soft;
       white-space: nowrap;
       transition: background-color 0.2s ease, color 0.2s ease;
 
@@ -376,21 +557,25 @@
         opacity: 0.85;
       }
 
+      // 选中态：品牌蓝底白字。
+      // 这里故意不切 font-weight——字重变化会让胶囊宽度抖动，
+      // 而分类区高度是按「可见分类变化」时才测量的，抖动可能导致末行被裁
       &.active {
-        background-color: #007aff;
-        color: #fff;
+        background-color: $brand;
+        color: #ffffff;
       }
     }
   }
-  
 
+  // 定制化情报推送 Banner：品牌蓝渐变卡片
   .info-card {
     display: flex;
     align-items: center;
-    margin: 0 30rpx 30rpx;
-    padding: 30rpx;
-    background-color: #f0f7ff;
-    border-radius: 16rpx;
+    margin: 8rpx 30rpx 36rpx;
+    padding: 28rpx;
+    background-image: linear-gradient(135deg, $brand-bright 0%, $brand-deep 100%);
+    border-radius: $radius-card;
+    box-shadow: $shadow-brand;
     cursor: pointer;
 
     &:active {
@@ -399,71 +584,99 @@
       transition: all 0.1s ease;
     }
 
+    // 白色半透明圆形衬底 + 白色星形图标
     .info-icon {
       width: 80rpx;
       height: 80rpx;
       margin-right: 20rpx;
       border-radius: 50%;
-      background-color: #007aff; 
-      background-image: url('/static/binlin.png'); 
+      background-color: rgba(255, 255, 255, 0.18);
+      background-image: url('/static/binlin.png');
       background-repeat: no-repeat;
-      background-position: center; 
-      background-size: 60%; 
+      background-position: center;
+      background-size: 60%;
+      flex-shrink: 0;
     }
 
     .info-content {
       flex: 1;
+      min-width: 0;
 
       .info-title {
-        font-size: 34rpx;
-        font-weight: 600;
-        color: #000;
+        font-size: 36rpx;
+        font-weight: 700;
+        color: #ffffff;
         margin-bottom: 8rpx;
+        line-height: 1.3;
       }
 
       .info-desc {
-        font-size: 28rpx;
-        color: #666;
+        font-size: 26rpx;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.4;
       }
     }
 
-    .info-arrow {
-      font-size: 40rpx;
-      color: #007aff;
+    // 「去设置」：白底圆角小按钮，文字与箭头用品牌蓝
+    .info-cta {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      margin-left: 16rpx;
+      padding: 10rpx 20rpx;
+      border-radius: 40rpx;
+      background-color: #ffffff;
+      font-size: 24rpx;
+      font-weight: 600;
+      line-height: 1.2;
+      color: $brand;
+
+      .cta-arrow {
+        margin-left: 4rpx;
+        font-size: 24rpx;
+        line-height: 1;
+        color: $brand;
+      }
     }
   }
 
+  // AI 聚合资讯
   .news-header {
     padding: 0 30rpx 20rpx;
 
     .news-title {
-      font-size: 38rpx;
-      font-weight: 600;
-      color: #000;
+      font-size: 36rpx;
+      font-weight: 700;
+      color: $text-title;
       margin-bottom: 8rpx;
     }
 
     .news-subtitle {
       font-size: 28rpx;
-      color: #666;
+      color: $text-body;
     }
   }
 
   .news-list {
     padding: 0 30rpx;
 
+    // 资讯卡片：纯白底 + 16px 圆角 + 柔和投影，AI 摘要块通栏贴底
     .news-item {
       display: flex;
-      padding: 15rpx;
-      border-bottom: 1rpx solid #b7b5b5bf;
-      margin-bottom: 10rpx;
-      gap: 20rpx;
-      border-radius: 12rpx;
-      border: 1px dashed #b7b5b5bf;
-      box-sizing: border-box; 
+      padding: 0;
+      margin-bottom: 24rpx;
+      background-color: $card-bg;
+      border-radius: $radius-card;
+      box-shadow: $shadow-card;
+      // 让摘要块的底部圆角跟着卡片一起裁切
+      overflow: hidden;
+      box-sizing: border-box;
 
       .news-main {
         flex: 1;
+        min-width: 0;
+        // 左右下留白给正文，摘要块再用负边距铺满整卡宽度
+        padding: 28rpx 28rpx 0;
 
         .news-source {
           display: flex;
@@ -472,61 +685,70 @@
           margin-bottom: 12rpx;
 
           .source-name {
-            font-size: 28rpx;
-            color: #007aff;
+            font-size: 26rpx;
+            color: $brand;
             font-weight: 500;
           }
 
           .source-time {
             font-size: 26rpx;
-            color: #999;
+            color: $text-muted;
           }
         }
 
         .news-title-text {
-          font-size: 32rpx;
-          font-weight: 600;
-          color: #000;
-          line-height: 1.4;
+          font-size: 34rpx;
+          font-weight: 700;
+          color: $text-title;
+          line-height: 1.45;
           margin-bottom: 16rpx;
         }
 
+        // AI 摘要块：浅灰蓝通栏 + 左侧品牌蓝竖条
         .news-ai-summary {
-          background-color: #f9f9f9;
-          padding: 20rpx;
-          border-radius: 8rpx;
-          border-left: 4rpx solid #007aff;
-          margin-bottom: 16rpx;
-		  word-wrap: break-word;
-		  white-space: pre-wrap;
+          margin: 0 -28rpx;
+          padding: 20rpx 28rpx;
+          background-color: $fill-soft;
+          border-left: 6rpx solid $brand;
+          border-radius: 0 0 $radius-card $radius-card;
+          box-sizing: border-box;
+          word-wrap: break-word;
+          // 这里必须是 normal：模板里两个 <text> 之间有一个换行，
+          // 容器若用 pre-wrap 会把它渲染成真正的换行，导致「AI 摘要：」独占一行。
+          // 摘要正文自己的换行由下面的 .summary-text 保留。
+          white-space: normal;
 
           .summary-label {
-            font-size: 28rpx;
-            color: #007aff;
+            font-size: 26rpx;
+            color: $brand;
             font-weight: 500;
           }
 
           .summary-text {
-            font-size: 28rpx;
-            color: #333;
-            line-height: 1.5;
+            font-size: 26rpx;
+            color: $text-body;
+            line-height: 1.6;
+            // 接口返回的摘要可能自带换行，保留它们
+            white-space: pre-wrap;
           }
         }
       }
 
+      // 无真实图片时的蓝灰几何渐变占位
       .news-img {
         width: 200rpx;
         height: 200rpx;
-        border-radius: 16rpx;
+        border-radius: 20rpx;
         flex-shrink: 0;
+        background-image: linear-gradient(135deg, #dce7f7 0%, #b9cdec 100%);
       }
     }
 
     .load-status {
       text-align: center;
-      padding: 30rpx 0;
+      padding: 36rpx 0;
       font-size: 26rpx;
-      color: #999;
+      color: $text-muted;
     }
   }
 
@@ -536,12 +758,12 @@
     bottom: 150rpx;
     width: 120rpx;
     height: 120rpx;
-    background-color: #007aff;
+    background-color: $brand;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4rpx 20rpx rgba(0, 122, 255, 0.3);
+    box-shadow: 0 4rpx 20rpx rgba(41, 129, 240, 0.3);
 
     .float-icon {
       font-size: 60rpx;
@@ -556,11 +778,11 @@
     left: 0;
     right: 0;
     height: 120rpx;
-    background-color: #fff;
+    background-color: $card-bg;
     display: flex;
     align-items: center;
     justify-content: space-around;
-    border-top: 1rpx solid #f0f0f0;
+    border-top: 1rpx solid $line;
     z-index: 999;
 
     .tab-item {
@@ -571,40 +793,41 @@
 
       &.active {
         .tab-text {
-          color: #007aff;
+          color: $brand;
         }
         .tab-icon {
-          background-color: #007aff;
+          background-color: $brand;
         }
       }
 
       .tab-icon {
         width: 48rpx;
         height: 48rpx;
-        background-color: #007aff;
+        background-color: $brand;
         border-radius: 4rpx;
 
 
         .tab-text {
           font-size: 26rpx;
-          color: #999;
+          color: $text-muted;
         }
       }
     }
   }
 
+  // 回到顶部：品牌蓝圆钮，淡入淡出
   .back-to-top-btn {
     position: fixed;
     right: 30rpx;
     bottom: 180rpx; /* 位置稍微高一点，避免和 TabBar 或底部内容冲突 */
     width: 80rpx;
     height: 80rpx;
-    background-color: rgba(0, 122, 255, 0.8); /* 半透明蓝色 */
+    background-color: rgba(41, 129, 240, 0.92);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.2);
+    box-shadow: 0 6rpx 16rpx rgba(41, 129, 240, 0.35);
     z-index: 999;
     transition: opacity 0.3s; /* 淡入淡出效果 */
 
@@ -617,9 +840,8 @@
 
     /* 可选：点击时的活跃状态 */
     &:active {
-      background-color: rgba(0, 122, 255, 1);
+      background-color: $brand;
       transform: scale(0.95);
     }
-    
   }
 }

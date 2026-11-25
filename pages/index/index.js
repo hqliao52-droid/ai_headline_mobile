@@ -46,6 +46,13 @@ export default {
       categoryWrapHeight: 0,
       // 首次测量完成前不启用过渡，避免一进页面就演一遍展开动画
       categoryWrapReady: false,
+      // 分类名被截断时的完整名称浮层：显示 1s 后自动消失
+      categoryTipVisible: false,
+      categoryTipText: '',
+      // 浮层的自动隐藏定时器（非响应式也无所谓，放这里只为统一清理）
+      categoryTipTimer: null,
+      // 胶囊能完整显示的字符数（与 SCSS 里 width: 162rpx 的 5 字宽对应）
+      categoryNameLimit: 5,
 
       articleInfo: null,
       
@@ -125,6 +132,11 @@ export default {
       const active = this.categories.find(item => item.id === activeId)
       return active ? active.tag_name : '全部'
     },
+    // 名字是否超过胶囊的 5 字宽度（会显示省略号），超过才需要浮层补全
+    // 用 Array.from 按「字符」计数，避免 emoji / 生僻字被拆成两半误判
+    isCategoryNameOverflow() {
+      return Array.from(this.currentCategoryName).length > this.categoryNameLimit
+    },
     // 收起时只展示前几个分类；若当前选中的分类被折在外面，
     // 就把最后一个位置让给它，保证收起状态下高亮项始终可见
     visibleCategories() {
@@ -142,6 +154,24 @@ export default {
         return head
       }
       return [...head.slice(0, this.collapsedCount - 1), active]
+    },
+    // 左右箭头遍历的完整序列：「全部」在最前，后面按接口返回顺序排
+    categorySequence() {
+      return ['all', ...this.categories]
+    },
+    // 当前分类在序列中的下标；-1 = 没对上（接口还没回来），此时两个箭头都禁用
+    currentCategoryIndex() {
+      const activeId = this.currentCategoryId
+      return this.categorySequence.findIndex(item =>
+        item === 'all' ? activeId === 'all' : item.id === activeId
+      )
+    },
+    hasPrevCategory() {
+      return this.currentCategoryIndex > 0
+    },
+    hasNextCategory() {
+      const index = this.currentCategoryIndex
+      return index >= 0 && index < this.categorySequence.length - 1
     },
     // 分类标签区的高度：直接给实测 px 值
     categoryWrapStyle() {
@@ -211,6 +241,10 @@ export default {
       this.measureCategoryWrap()
     })
   },
+  onUnload() {
+    // 页面销毁时清掉浮层定时器，避免回调打到已卸载的实例上
+    this.clearCategoryTipTimer()
+  },
   onPullDownRefresh() {
     console.log('用户触发了下拉刷新')
     // 1. 重置分页状态
@@ -246,6 +280,44 @@ export default {
       this.pageSize = 10
       this.isFinished = false
       this.getNewsList(false)
+      // 切换后若名字被截断，自动浮出完整名称 1s，解决「看不全」的阅读问题
+      this.$nextTick(() => {
+        this.maybeShowCategoryTip()
+      })
+    },
+    // 点胶囊：重新唤起完整名称浮层（移动端没有 hover，用点击代替）
+    onCategoryCurrentTap() {
+      if (this.isCategoryNameOverflow) {
+        this.showCategoryTip()
+      }
+    },
+    /**
+     * 名字被截断时才浮出完整名称
+     * 没截断就没有必要打扰用户
+     */
+    maybeShowCategoryTip() {
+      if (!this.isCategoryNameOverflow) return
+      this.showCategoryTip()
+    },
+    /**
+     * 显示完整分类名，1s 后自动消失
+     * 重复触发时先清掉旧定时器，保证每次都是从 1s 重新计时
+     */
+    showCategoryTip() {
+      this.clearCategoryTipTimer()
+      this.categoryTipText = this.currentCategoryName
+      this.categoryTipVisible = true
+      this.categoryTipTimer = setTimeout(() => {
+        this.categoryTipVisible = false
+        this.categoryTipTimer = null
+      }, 1500)
+    },
+    // 清掉浮层的自动隐藏定时器（重复唤起 / 页面销毁时用）
+    clearCategoryTipTimer() {
+      if (this.categoryTipTimer) {
+        clearTimeout(this.categoryTipTimer)
+        this.categoryTipTimer = null
+      }
     },
     backToTop() {
       uni.pageScrollTo({
@@ -256,6 +328,24 @@ export default {
     // 展开 / 收起分类列表
     toggleCategoryExpand() {
       this.categoryExpanded = !this.categoryExpanded
+    },
+    // 左箭头：切到上一个分类
+    switchToPrevCategory() {
+      this.switchToCategoryAt(this.currentCategoryIndex - 1)
+    },
+    // 右箭头：切到下一个分类
+    switchToNextCategory() {
+      this.switchToCategoryAt(this.currentCategoryIndex + 1)
+    },
+    /**
+     * 按序列下标切分类，越界直接忽略（首尾箭头虽然置灰，仍可能被点到）
+     * 统一走 switchCategory，所以下方标签的高亮和列表刷新会自动跟上
+     * @param {Number} index - categorySequence 里的下标
+     */
+    switchToCategoryAt(index) {
+      const list = this.categorySequence
+      if (index < 0 || index >= list.length) return
+      this.switchCategory(list[index])
     },
     /**
      * 量分类标签区的真实高度
@@ -296,6 +386,12 @@ export default {
      * 没吸住说明分类开头就在眼前，此时不响应，避免点一下页面乱跳
      */
     onCategoryHeadTap() {
+      this.scrollToCategoryStart()
+    },
+    /**
+     * 滚到分类列表开头（标题停在头部下方）
+     */
+    scrollToCategoryStart() {
       const query = uni.createSelectorQuery()
       query.select('.category-head').boundingClientRect()
       query.select('.category-wrap').boundingClientRect()
@@ -310,10 +406,10 @@ export default {
         const headHeight = headRect.height || 0
         // 标签区紧跟标题，所以 标题的文档位置 = 标签的文档位置 - 标题高度
         const headOffset = scrollTop + wrapRect.top - headHeight
-        // 没被吸住时标题的自然位置就是 wrapRect.top - headHeight；
-        // 只有被吸住时 headRect.top 才会更靠上
+        // 标题「没被吸住」时，它就渲染在自己的自然位置上，两者相等；
+        // 被吸住时 headRect.top 才大于自然位置（自然位置更靠上、甚至已经滑出屏幕）
         const naturalTop = wrapRect.top - headHeight
-        if (naturalTop <= headRect.top + 1) return
+        if (naturalTop >= headRect.top - 1) return
 
         uni.pageScrollTo({
           // headRect.top 就是吸住时的停靠位置（= 头部高度），

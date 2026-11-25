@@ -26,7 +26,7 @@
       <!-- 搜索入口：收起时半透明，点击一次唤醒、再点一次进入输入 -->
       <view
         class="search-bar"
-        :class="{ 'is-locked': isSearchLocked, 'is-active': searchActive }"
+        :class="{ 'is-locked': isSearchLocked, 'is-active': searchActive, 'is-focused': searchFocused }"
         :style="searchBarStyle"
         @click="onSearchTap"
       >
@@ -38,7 +38,7 @@
           type="text"
           confirm-type="search"
           placeholder="搜索热词 / 行业 / 资讯"
-          placeholder-style="color:#727174;font-size:28rpx"
+          placeholder-style="color:#9AA8BD;font-size:28rpx"
           @confirm="onSearchConfirm"
           @blur="onSearchBlur"
         />
@@ -53,7 +53,7 @@
       </view>
       <view class="hot-tags">
         <view class="tag tag-blue">TikTok Shop</view>
-        <view class="tag tag-red">印尼物流新规</view>
+        <view class="tag tag-orange">印尼物流新规</view>
         <view class="tag tag-green">SHEIN 半托管</view>
         <view class="tag tag-normal">中东支付网关</view>
         <view class="tag tag-normal">AI 营销工具</view>
@@ -66,9 +66,32 @@
          套在小容器里会在容器滚出屏幕时一起消失 -->
     <view class="category-head" @click="onCategoryHeadTap">
       <text class="category-head-title">全部分类</text>
-      <!-- 当前选中的分类：收起时也能一眼看到筛选条件 -->
-      <view class="category-current" :class="{ 'is-all': currentCategoryId === 'all' }">
-        {{ currentCategoryName }}
+      <!-- 当前分类切换器：‹ 科技与数字服务 ›
+           左右箭头切上一个 / 下一个，下方标签区同步高亮（都走 switchCategory） -->
+      <view class="category-switcher">
+        <view
+          class="switch-arrow"
+          :class="{ 'is-disabled': !hasPrevCategory }"
+          @click.stop="switchToPrevCategory"
+        >
+          <view class="arrow-glyph arrow-left"></view>
+        </view>
+        <!-- 当前选中的分类：收起时也能一眼看到筛选条件 -->
+        <view class="category-current" :class="{ 'is-all': currentCategoryId === 'all' }" @click="onCategoryCurrentTap">
+          <text class="current-text">{{ currentCategoryName }}</text>
+        </view>
+        <view
+          class="switch-arrow"
+          :class="{ 'is-disabled': !hasNextCategory }"
+          @click.stop="switchToNextCategory"
+        >
+          <view class="arrow-glyph arrow-right"></view>
+        </view>
+
+        <!-- 名字被截断时的完整名称：切换后自动浮出 1s，也可点胶囊再次唤起 -->
+        <view class="category-tip" v-if="categoryTipVisible">
+          <text class="tip-text">{{ categoryTipText }}</text>
+        </view>
       </view>
       <!-- 分类数量不多时不显示切换按钮，避免点了没反应 -->
       <view class="category-toggle" v-if="hasMoreCategories" @click.stop="toggleCategoryExpand">
@@ -106,7 +129,10 @@
         <view class="info-title">定制化情报推送</view>
         <view class="info-desc">基于您的企业经营范围实时更新</view>
       </view>
-      <view class="info-arrow">→</view>
+      <view class="info-cta">
+        <text>去设置</text>
+        <text class="cta-arrow">›</text>
+      </view>
     </view>
 
     <!-- AI聚合资讯标题 -->
