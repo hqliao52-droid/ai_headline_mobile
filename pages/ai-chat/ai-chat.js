@@ -1,6 +1,6 @@
 import { request } from '@/utils/request.js';
 import { getUserInfo } from '@/utils/user.js';
-import { getReadHistory } from '@/utils/history.js';
+import { getReadHistory, MAX_HISTORY_COUNT } from '@/utils/history.js';
 import { streamRequest } from '@/utils/stream-request.js';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-light.css';
@@ -63,6 +63,8 @@ export default {
 
       scrollTop: 0,
       recentHistory: [],
+      // 最近阅读最多保留条数（与 utils/history.js 保持一致）
+      maxHistoryCount: MAX_HISTORY_COUNT,
       isHistoryExpanded: false,
 
       selectedNewsIds: [],

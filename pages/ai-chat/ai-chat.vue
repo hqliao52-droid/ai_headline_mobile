@@ -155,7 +155,7 @@
       <!-- ... 保持原有内容 ... -->
       <view class="recent-read-section" v-if="recentHistory.length > 0">
         <view class="section-header" @click="toggleHistory">
-          <view class="section-title">最近阅读（已记录{{ recentHistory.length }}/4条）</view>
+          <view class="section-title">最近阅读（已记录{{ recentHistory.length }}/{{ maxHistoryCount }}条）</view>
           <text class="toggle-icon" :class="{ 'expanded': isHistoryExpanded }">︿</text>
         </view>
 

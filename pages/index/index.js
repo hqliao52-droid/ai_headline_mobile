@@ -1,7 +1,12 @@
 import { request } from '@/utils/request.js'
 import { getUserInfo } from '@/utils/user.js';
+// 「刚才看过」入口：时钟 + 最近看过浮层（显式注册，不依赖 easycom 扫描）
+import RecentClock from '@/components/recent-clock/recent-clock.vue';
 
 export default {
+  components: {
+    RecentClock
+  },
   data() {
     return {
       avatar: '',
@@ -228,6 +233,20 @@ export default {
   onShow(){
     // 每次页面显示时重新获取最新用户信息
     this.loadUserInfo();
+    // 时钟入口：从详情页 / 后台回来时刷新最近看过，并重新校准指针
+    this.$nextTick(() => {
+      const clock = this.$refs.recentClock;
+      if (!clock) return;
+      clock.refreshHistory();
+      clock.resumeClock();
+    });
+  },
+  onHide() {
+    // 页面隐藏（切 Tab / 切后台）：暂停时钟定时器，避免后台耗电
+    const clock = this.$refs.recentClock;
+    if (clock) {
+      clock.pauseClock();
+    }
   },
   onReady() {
     // 首帧渲染完先量一次分类区高度，收起状态立刻就有准确高度
@@ -239,6 +258,11 @@ export default {
   onResize() {
     this.$nextTick(() => {
       this.measureCategoryWrap()
+      // 浮层高度按 windowHeight 算，屏幕尺寸变了要重算
+      const clock = this.$refs.recentClock
+      if (clock) {
+        clock.initSheetSize()
+      }
     })
   },
   onUnload() {

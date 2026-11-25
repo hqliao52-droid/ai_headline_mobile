@@ -1,0 +1,292 @@
+// 「刚才看过」入口：时钟 + 角标 + 最近看过浮层
+// 颜色与首页保持同一套：品牌蓝 / 近黑标题 / 浅灰说明 / 极浅分隔线
+$brand: #2981f0; // 品牌蓝：表盘、分针、一键清除
+$brand-press: #eaf2fe; // 按压态浅蓝衬底
+$text-title: #16202e; // 近黑：标题、时针
+$text-muted: #9aa8bd; // 浅灰：时间、删除图标、空态
+$line: #eef2f8; // 极浅分隔线
+$danger: #fc4e52; // 告警红：角标底色
+
+// 浮层淡入（transform 里必须带上 translateX(-50%)，否则会横向跳一下）
+@keyframes recent-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(40rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes recent-mask-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.recent-clock-root {
+  // 根节点只做容器：里面的时钟和浮层都是 fixed，不占页面文档流
+  position: relative;
+}
+
+// 时钟入口：白底 + 轻阴影，与回顶按钮视觉一致
+.recent-clock {
+  position: fixed;
+  right: 30rpx;
+  // 回顶按钮 bottom 180rpx + 高 80rpx = 顶部 260rpx，再留 24rpx（12px）间距
+  bottom: 284rpx;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 6rpx 16rpx rgba(22, 32, 46, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // z-index 低于回顶按钮（999），二者不重叠
+  z-index: 997;
+  transition: background-color 0.15s ease;
+
+  // 按压态：衬底变浅蓝，指针保持品牌蓝
+  &:active {
+    background-color: $brand-press;
+  }
+
+  // 表盘：极简圆形，线性描边 2px（= 4rpx）
+  .clock-dial {
+    position: relative;
+    width: 60rpx;
+    height: 60rpx;
+    box-sizing: border-box;
+    border: 4rpx solid $brand;
+    border-radius: 50%;
+  }
+
+  // 指针公共部分：底部中心为旋转圆心，只动 transform，不触发重排
+  .hand {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: 50% 100%;
+    border-radius: 999rpx;
+    // 线性过渡：用 ease-in-out 会在跳变时出现追赶回摆
+    transition: transform 0.3s linear;
+
+    // 校准时临时关掉过渡，指针瞬间落位
+    &.is-snap {
+      transition: none;
+    }
+  }
+
+  // 时针：短粗，深灰；长度约为表盘半径的 50%
+  .hand-hour {
+    width: 6rpx;
+    height: 16rpx;
+    margin-left: -3rpx;
+    // 让指针底部正好落在表盘圆心
+    margin-top: -16rpx;
+    background-color: $text-title;
+    z-index: 2;
+  }
+
+  // 分针：细长，品牌蓝；长度约为表盘半径的 75%
+  .hand-minute {
+    width: 4rpx;
+    height: 22rpx;
+    margin-left: -2rpx;
+    margin-top: -22rpx;
+    background-color: $brand;
+    z-index: 1;
+  }
+
+  // 指针底部圆点
+  .clock-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8rpx;
+    height: 8rpx;
+    margin-left: -4rpx;
+    margin-top: -4rpx;
+    border-radius: 50%;
+    background-color: $brand;
+    z-index: 3;
+  }
+
+  // 角标：正圆，压在表盘左上角，向右上溢出（重叠量约为角标半径的一半）
+  .clock-badge {
+    position: absolute;
+    left: -14rpx;
+    top: -14rpx;
+    box-sizing: border-box;
+    min-width: 28rpx;
+    height: 28rpx;
+    padding: 0 4rpx;
+    border-radius: 14rpx;
+    // 白色描边，避免压在浅色背景上发糊
+    border: 2rpx solid #ffffff;
+    background-color: $danger;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+
+    .badge-text {
+      font-size: 20rpx;
+      line-height: 1;
+      font-weight: 700;
+      color: #ffffff;
+    }
+  }
+}
+
+// 遮罩：半透明黑，盖住吸顶头部（998）与回顶按钮（999）
+.recent-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(22, 32, 46, 0.4);
+  z-index: 1010;
+  animation: recent-mask-in 0.2s ease;
+}
+
+// 浮层：宽 75%、高 30%，底部弹出（高度由 JS 按 windowHeight 算好写成行内 px）
+.recent-sheet {
+  position: fixed;
+  left: 50%;
+  // 依次兜底：老 WebView 不认 env()，退回贴底；再靠 margin 让出 Home 指示条
+  bottom: 0;
+  bottom: constant(safe-area-inset-bottom);
+  bottom: env(safe-area-inset-bottom);
+  margin-bottom: 24rpx;
+  width: 75%;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  border-radius: 32rpx;
+  box-shadow: 0 12rpx 48rpx rgba(22, 32, 46, 0.18);
+  transform: translateX(-50%);
+  z-index: 1011;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: recent-sheet-in 0.24s ease-out;
+
+  // 标题栏
+  .sheet-header {
+    height: 92rpx;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    padding: 0 32rpx;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1rpx solid $line;
+
+    .sheet-title {
+      font-size: 32rpx;
+      font-weight: 700;
+      color: $text-title;
+    }
+
+    // 一键清除：文字按钮，右侧留出点击热区
+    .sheet-clear {
+      padding: 12rpx 0 12rpx 24rpx;
+
+      .clear-text {
+        font-size: 26rpx;
+        color: $brand;
+      }
+
+      &:active {
+        opacity: 0.6;
+      }
+    }
+  }
+
+  // 列表区：高度由 JS 算好写成行内 px（scroll-view 必须有确定高度，不能用 flex 撑）
+  .sheet-body {
+    flex-shrink: 0;
+  }
+
+  // 空态
+  .sheet-empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .empty-text {
+      font-size: 26rpx;
+      color: $text-muted;
+    }
+  }
+
+  // 单条记录：上行标题、次行浏览时间、右侧删除
+  .sheet-item {
+    padding: 20rpx 32rpx;
+    display: flex;
+    align-items: center;
+    border-bottom: 1rpx solid $line;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:active {
+      background-color: #f7fafd;
+    }
+
+    .item-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    // 标题：加粗近黑，单行超出截断
+    .item-title {
+      display: block;
+      font-size: 28rpx;
+      font-weight: 700;
+      color: $text-title;
+      line-height: 1.35;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    // 浏览时间：小号浅灰
+    .item-time {
+      display: block;
+      margin-top: 8rpx;
+      font-size: 24rpx;
+      color: $text-muted;
+      line-height: 1.2;
+    }
+
+    // 单条删除入口：热区撑到 56rpx，图标保持轻量
+    .item-del {
+      flex-shrink: 0;
+      width: 56rpx;
+      height: 56rpx;
+      margin-left: 16rpx;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      .del-glyph {
+        font-size: 34rpx;
+        line-height: 1;
+        color: $text-muted;
+      }
+
+      &:active {
+        opacity: 0.6;
+      }
+    }
+  }
+}

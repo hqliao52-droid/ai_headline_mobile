@@ -254,7 +254,11 @@ export default {
             this.articleInfo = detail;
             const userInfo = getUserInfo();
             if (userInfo && userInfo.id) {
-              addReadHistory(this.newsData, userInfo.id); // 传入第二个参数 userId
+              // 带上 rss_id：首页「最近看过」浮层点回来时要用它还原详情页
+              addReadHistory(
+                { ...this.newsData, rss_id: this.rss_id || this.newsData.rss_id },
+                userInfo.id
+              );
             }
 
             console.log(res.data);

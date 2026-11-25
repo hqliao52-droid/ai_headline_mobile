@@ -171,6 +171,10 @@
       </view>
     </view>
 
+    <!-- 「刚才看过」入口：时钟常驻悬浮，停在回顶按钮正上方 12px -->
+    <recent-clock ref="recentClock" />
+
+    <!-- 回到顶部按钮 -->
     <view 
       class="back-to-top-btn" 
       v-if="showBackToTop" 
