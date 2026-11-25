@@ -60,20 +60,36 @@
       </view>
     </view>
 
-    <!-- 分类标签栏 -->
-    <view class="category-tit" style="margin-bottom: 10rpx;font-size: 30rpx;font-weight: 600;">
-      <text>全部分类</text>  
+    <!-- 分类标题：吸顶。像 VSCode 里的函数签名，下面的内容滚过去时它停在头部下方；
+         点它回到分类列表开头。
+         注意：它必须是 .container 的直接子节点——sticky 的吸附范围被父容器高度限制，
+         套在小容器里会在容器滚出屏幕时一起消失 -->
+    <view class="category-head" @click="onCategoryHeadTap">
+      <text class="category-head-title">全部分类</text>
+      <!-- 当前选中的分类：收起时也能一眼看到筛选条件 -->
+      <view class="category-current" :class="{ 'is-all': currentCategoryId === 'all' }">
+        {{ currentCategoryName }}
+      </view>
+      <!-- 分类数量不多时不显示切换按钮，避免点了没反应 -->
+      <view class="category-toggle" v-if="hasMoreCategories" @click.stop="toggleCategoryExpand">
+        <text class="toggle-text">{{ categoryExpanded ? '收起' : '展开' }}</text>
+        <view class="toggle-arrow" :class="{ 'is-open': categoryExpanded }"></view>
+      </view>
     </view>
-    <scroll-view class="category-scroll" scroll-x="true" show-scrollbar="false">
+
+    <!-- 分类标签区：高度由 JS 实测后写成 px，配合 CSS 的 0.7s 过渡实现向下展开 / 向上收起 -->
+    <view class="category-wrap" :class="{ 'no-transition': !categoryWrapReady }" :style="categoryWrapStyle">
       <view class="category-bar">
-        <view class="category-item"
-          :class="{ 'active': currentCategoryId === 'all' }" 
-          @click="switchCategory('all')">
+        <view
+          class="category-item"
+          :class="{ 'active': currentCategoryId === 'all' }"
+          @click="switchCategory('all')"
+        >
           全部
         </view>
-        <view 
-          class="category-item" 
-          v-for="item in categories" 
+        <view
+          class="category-item"
+          v-for="item in visibleCategories"
           :key="item.id"
           :class="{ 'active': currentCategoryId === item.id }"
           @click="switchCategory(item)"
@@ -81,7 +97,7 @@
           {{ item.tag_name }}
         </view>
       </view>
-    </scroll-view>
+    </view>
 
     <!-- 定制化情报推送 -->
     <view class="info-card" @click="goToPersonalize">

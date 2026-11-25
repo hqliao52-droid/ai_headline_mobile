@@ -37,6 +37,16 @@ export default {
       // 控制 UI 高亮的当前选中 ID，初始为 'all' 或 null
       currentCategoryId: 'all', 
 
+      // 分类折叠：默认收起，只显示前 collapsedCount 个
+      categoryExpanded: false,
+      // 收起时展示的分类数量（不含“全部”）
+      collapsedCount: 3,
+      // 分类标签区实测高度(px)：展开 / 收起靠它做 0.7s 平滑过渡
+      // 初始 0 是为了首帧不闪出“全部展开”的样子，量到后立刻写回真实高度
+      categoryWrapHeight: 0,
+      // 首次测量完成前不启用过渡，避免一进页面就演一遍展开动画
+      categoryWrapReady: false,
+
       articleInfo: null,
       
     }
@@ -100,6 +110,58 @@ export default {
     // 头像右侧的昵称文案
     displayName() {
       return this.nickName || '未登录'
+    },
+    // 分类数量超过收起阈值时才需要“展开/收起”按钮
+    hasMoreCategories() {
+      return this.categories.length > this.collapsedCount
+    },
+    // 当前选中分类的名字：标题旁边显示，收起状态下也能一眼看到筛选条件
+    currentCategoryName() {
+      const activeId = this.currentCategoryId
+      if (activeId === 'all' || activeId === null || activeId === undefined) {
+        return '全部'
+      }
+      // 分类接口还没回来时先用 id 兜底，避免标题旁边空一块
+      const active = this.categories.find(item => item.id === activeId)
+      return active ? active.tag_name : '全部'
+    },
+    // 收起时只展示前几个分类；若当前选中的分类被折在外面，
+    // 就把最后一个位置让给它，保证收起状态下高亮项始终可见
+    visibleCategories() {
+      const list = this.categories
+      if (this.categoryExpanded || list.length <= this.collapsedCount) {
+        return list
+      }
+      const head = list.slice(0, this.collapsedCount)
+      const activeId = this.currentCategoryId
+      if (activeId === 'all' || head.some(item => item.id === activeId)) {
+        return head
+      }
+      const active = list.find(item => item.id === activeId)
+      if (!active) {
+        return head
+      }
+      return [...head.slice(0, this.collapsedCount - 1), active]
+    },
+    // 分类标签区的高度：直接给实测 px 值
+    categoryWrapStyle() {
+      return { height: this.categoryWrapHeight + 'px' }
+    }
+  },
+  watch: {
+    // 展开状态 / 可见分类一变，渲染出来的高度就变了：
+    // 重新量一次写回 height，CSS 那边只负责 0.7s 过渡，
+    // 于是展开就是向下平滑撑开，收起就是向上平滑收拢
+    visibleCategories() {
+      this.$nextTick(() => {
+        this.measureCategoryWrap()
+      })
+    },
+    // 分类接口回来后标签才真正渲染，高度要重新量
+    categories() {
+      this.$nextTick(() => {
+        this.measureCategoryWrap()
+      })
     }
   },
   
@@ -136,6 +198,18 @@ export default {
   onShow(){
     // 每次页面显示时重新获取最新用户信息
     this.loadUserInfo();
+  },
+  onReady() {
+    // 首帧渲染完先量一次分类区高度，收起状态立刻就有准确高度
+    this.$nextTick(() => {
+      this.measureCategoryWrap()
+    })
+  },
+  // 窗口尺寸 / 横竖屏变化后 rpx 换算变了，标签区高度要重新量
+  onResize() {
+    this.$nextTick(() => {
+      this.measureCategoryWrap()
+    })
   },
   onPullDownRefresh() {
     console.log('用户触发了下拉刷新')
@@ -177,6 +251,76 @@ export default {
       uni.pageScrollTo({
         scrollTop: 0,
         duration: 300 // 动画时长，单位 ms
+      })
+    },
+    // 展开 / 收起分类列表
+    toggleCategoryExpand() {
+      this.categoryExpanded = !this.categoryExpanded
+    },
+    /**
+     * 量分类标签区的真实高度
+     * 元素被外层 overflow 裁掉也不影响它自身的 layout 高度，
+     * 所以收起时量到的是“一行”的高度，展开后量到的是“全部”的高度
+     * @param {Number} retry - 量不到时的重试次数（首帧 DOM 可能还没渲染完）
+     */
+    measureCategoryWrap(retry = 1) {
+      const query = uni.createSelectorQuery()
+      query.select('.category-bar').boundingClientRect()
+      query.exec((res) => {
+        const rect = res && res[0]
+        if (rect && rect.height) {
+          // 向上取整：宁可多 1px，也不要把最后一行裁掉
+          const height = Math.ceil(rect.height)
+          // 首次测量：先写高度，下一帧再打开过渡，
+          // 否则一进页面就会从 0 演一遍展开动画
+          // 分类还没请求回来时不算“首次完成”，等标签真正渲染出来再定高，
+          // 免得数据到位那一刻又从一行演一遍展开
+          if (!this.categoryWrapReady && this.categories.length > 0) {
+            this.categoryWrapHeight = height
+            this.$nextTick(() => {
+              this.categoryWrapReady = true
+            })
+            return
+          }
+          this.categoryWrapHeight = height
+          return
+        }
+        if (retry > 0) {
+          setTimeout(() => this.measureCategoryWrap(retry - 1), 80)
+        }
+      })
+    },
+    /**
+     * 点吸顶的分类标题：回到分类列表开头
+     * 和 VSCode 点吸顶的函数签名一样——只有标题真的被吸住了才跳，
+     * 没吸住说明分类开头就在眼前，此时不响应，避免点一下页面乱跳
+     */
+    onCategoryHeadTap() {
+      const query = uni.createSelectorQuery()
+      query.select('.category-head').boundingClientRect()
+      query.select('.category-wrap').boundingClientRect()
+      query.selectViewport().scrollOffset()
+      query.exec((res) => {
+        const headRect = res && res[0]
+        const wrapRect = res && res[1]
+        const viewport = res && res[2]
+        if (!headRect || !wrapRect) return
+
+        const scrollTop = viewport ? viewport.scrollTop : 0
+        const headHeight = headRect.height || 0
+        // 标签区紧跟标题，所以 标题的文档位置 = 标签的文档位置 - 标题高度
+        const headOffset = scrollTop + wrapRect.top - headHeight
+        // 没被吸住时标题的自然位置就是 wrapRect.top - headHeight；
+        // 只有被吸住时 headRect.top 才会更靠上
+        const naturalTop = wrapRect.top - headHeight
+        if (naturalTop <= headRect.top + 1) return
+
+        uni.pageScrollTo({
+          // headRect.top 就是吸住时的停靠位置（= 头部高度），
+          // 让标题的文档位置正好滚到这个位置即可
+          scrollTop: Math.max(headOffset - headRect.top, 0),
+          duration: 300
+        })
       })
     },
     async loadUserInfo(){

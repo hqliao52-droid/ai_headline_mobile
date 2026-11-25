@@ -264,27 +264,104 @@
     }
   }
 
-  .category-tit {
-    width: 100%; 
-    
-    /* 标题样式优化 */
+  // 分类标题：吸顶。
+  // sticky 的吸附范围 = 父容器的内容盒，所以它必须直接挂在 .container 下，
+  // 否则父容器一滚出屏幕，标题就跟着消失（分类区只有标题+标签，很短）
+  .category-head {
+    display: flex;
+    align-items: center;
+    padding: 12rpx 30rpx;
+    position: sticky;
+    // 头部收起后的高度 = 状态栏 + 15rpx 行内边距 + 42rpx×1.2 标题行 + 30rpx 下内边距
+    // （收起时问候语高度为 0，搜索框上下外边距互相抵消，不再占高度）
+    top: calc(var(--status-bar-height, 0px) + 96rpx);
+    // 必须高于头部(998)，否则会滑到头部底下去
+    z-index: 999;
+    // 下方内容会从标题底下滚过去，用底色挡住
+    background-color: #ffffff;
+  }
+
+  .category-head-title {
+    flex-shrink: 0;
     font-size: 32rpx;
     font-weight: 600;
     color: #333;
-    margin-bottom: 10rpx;
-    display: block;
-    margin-left: 5%;
   }
-  // 双行滑动分类
-  .category-scroll {
-    white-space: nowrap;
-    padding: 0 30rpx 20rpx;
 
-    .category-bar {
+  // 标题右侧的当前分类：淡蓝底小胶囊，和下面的分类标签区分开（那只是“可点选项”）
+  .category-current {
+    // 名字过长时省略，不把右侧“展开”按钮挤掉
+    max-width: 300rpx;
+    margin-left: 16rpx;
+    padding: 4rpx 16rpx;
+    border-radius: 8rpx;
+    font-size: 24rpx;
+    line-height: 1.4;
+    color: #007aff;
+    background-color: #eaf3ff;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    // 选中的是“全部”时弱化一点，避免看起来像有筛选条件
+    &.is-all {
+      color: #8a8a8e;
+      background-color: #f2f2f4;
+    }
+  }
+
+  // 右侧“展开/收起”：整块都可点，热区比文字大一点
+  .category-toggle {
+    display: flex;
+    align-items: center;
+    // 靠右，中间的空白吃掉标题和当前分类的宽度差
+    margin-left: auto;
+    padding: 8rpx 0 8rpx 20rpx;
+
+    &:active {
+      opacity: 0.6;
+    }
+
+    .toggle-text {
+      font-size: 26rpx;
+      color: #007aff;
+      line-height: 1;
+    }
+
+    // 用边框画一个向下的小箭头，展开时旋转 180°
+    .toggle-arrow {
+      width: 12rpx;
+      height: 12rpx;
+      margin-left: 10rpx;
+      margin-top: -6rpx;
+      border-right: 3rpx solid #007aff;
+      border-bottom: 3rpx solid #007aff;
+      transform: rotate(45deg);
+      transition: transform 0.7s ease, margin-top 0.7s ease;
+
+      &.is-open {
+        margin-top: 4rpx;
+        transform: rotate(-135deg);
+      }
+    }
+  }
+
+  // 高度由 JS 写成 px，这里只负责过渡：展开向下撑开、收起向上收拢，都是 0.7s
+  .category-wrap {
+    overflow: hidden;
+    padding: 0 30rpx 10rpx;
+    transition: height 0.7s ease;
+
+    // 首次测量时直接跳到正确高度，不演一遍动画
+    &.no-transition {
+      transition: none;
+    }
+  }
+
+  .category-bar {
     display: flex;
     flex-wrap: wrap;
     gap: 20rpx;
-    width: max-content;
 
     .category-item {
       padding: 16rpx 32rpx;
@@ -293,14 +370,17 @@
       color: #666;
       background-color: #f5f5f5;
       white-space: nowrap;
-      margin-bottom: 20rpx; // 行间距
+      transition: background-color 0.2s ease, color 0.2s ease;
+
+      &:active {
+        opacity: 0.85;
+      }
 
       &.active {
         background-color: #007aff;
         color: #fff;
       }
     }
-  }
   }
   
 
