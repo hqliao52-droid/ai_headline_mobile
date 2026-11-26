@@ -133,6 +133,15 @@
           >
             {{ item.tag_name }}
           </view>
+          <!-- 收起时的第 6 个位置：用「…」明示后面还有分类，
+               否则只看到 4 个标签，用户会以为分类就这么点。点它直接展开 -->
+          <view
+            class="category-item is-more"
+            v-if="showMoreIndicator"
+            @click.stop="toggleCategoryExpand"
+          >
+            <text class="more-dots">...</text>
+          </view>
         </view>
       </view>
 

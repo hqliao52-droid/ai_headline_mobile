@@ -52,8 +52,10 @@ export default {
 
       // 分类折叠：默认收起，只显示前 collapsedCount 个
       categoryExpanded: false,
-      // 收起时展示的分类数量（不含“全部”）
-      collapsedCount: 3,
+      // 收起时展示的分类数量（不含“全部”）。
+      // 收起后一共占 6 个位置：「全部」+ 4 个分类 + 末尾的「…」占位，
+      // 那个「…」很关键——没有它时用户会以为分类总共就这 4 个
+      collapsedCount: 4,
       // 分类标签区实测高度(px)：展开 / 收起靠它做 0.7s 平滑过渡
       // 初始 0 是为了首帧不闪出“全部展开”的样子，量到后立刻写回真实高度
       categoryWrapHeight: 0,
@@ -140,6 +142,11 @@ export default {
     // 分类数量超过收起阈值时才需要“展开/收起”按钮
     hasMoreCategories() {
       return this.categories.length > this.collapsedCount
+    },
+    // 收起且确实还有更多分类时，末尾显示「…」占位（第 6 个位置）
+    // 展开后不再显示，因为那时候全都在列表里了
+    showMoreIndicator() {
+      return !this.categoryExpanded && this.hasMoreCategories
     },
     // 当前选中分类的名字：标题旁边显示，收起状态下也能一眼看到筛选条件
     currentCategoryName() {

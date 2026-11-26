@@ -596,6 +596,36 @@ $shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
         height: 74rpx;
         padding: 0;
       }
+
+      // 收起时末尾的「…」占位：和普通胶囊同高，但更窄，只够放三个点
+      // 样式上刻意做弱：它是提示，不是可选的分类
+      &.is-more {
+        // 宽度固定，不随字号抖动；高度对齐普通胶囊（16rpx 上下内边距 + 30rpx 字 ≈ 74rpx）
+        width: 96rpx;
+        height: 74rpx;
+        padding: 0;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: $text-muted;
+        background-color: $fill-soft;
+
+        // 点「…」等于展开，按下时给反馈
+        &:active {
+          color: $brand;
+          background-color: #eaf2fe;
+        }
+
+        .more-dots {
+          // 三个点用字符排版，比画圆点省事且字重自然
+          font-size: 30rpx;
+          line-height: 1;
+          letter-spacing: 2rpx;
+          // 点的字形本身偏下，往上提一点才看着垂直居中
+          margin-top: -10rpx;
+        }
+      }
     }
   }
 
