@@ -1,12 +1,17 @@
 import { request } from '@/utils/request.js';
 import { getUserInfo } from '@/utils/user.js';
 import { uploadSingleSpeciallyFile } from '@/utils/uploadFile.js';
+// 底部 tab 切换的进入动画：每次 onShow 重新算一次方向
+import { resolveTabEnterClass } from '@/utils/tab-transition.js';
 
 export default {
   data() {
     return {
       nikeName: '未登录',
       avatar: '/static/images/default-avatar.png' || "",
+
+      // tab 切换时的进入动画 class，由 onShow 里重新计算（见 utils/tab-transition.js）
+      tabEnterClass: '',
 
       showAvatarPreview: false,
       // 企业统计数据
@@ -33,6 +38,8 @@ export default {
   onShow() {
     // 每次页面显示时重新获取最新用户信息
     this.loadUserInfo();
+    // tab 切换动画：原生 tabBar 没有转场，靠这里给内容区重新播一遍进入动画
+    this.tabEnterClass = resolveTabEnterClass('/pages/mine/mine');
   },
   methods: {
     handleMenuClick(item) {

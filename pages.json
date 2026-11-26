@@ -45,7 +45,17 @@
     {
       "path": "pages/news-detail/news-detail",
       "style": {
-        "navigationBarTitleText": "新闻详情"
+        "navigationBarTitleText": "新闻详情",
+        /*
+          转场动画（App 端）：
+          App 是原生页面栈，转场交给系统做最顺滑——从右侧滑入，返回时向右退出。
+          H5 端的滑入动画写在 news-detail.scss 的 .page-enter 里（条件编译只对非 App 生效），
+          两端各用各自最顺手的方式，不会叠加成「滑两次」。
+        */
+        "app-plus": {
+          "animationType": "slide-in-right",
+          "animationDuration": 300
+        }
       }
     },
     {
@@ -60,7 +70,12 @@
       "style": {
         "navigationBarTitleText": "定制化情报",
         "onReachBottomDistance": 50,
-        "enablePullDownRefresh": false
+        "enablePullDownRefresh": false,
+        /* 转场动画（App 端）：与新闻详情页保持一致，从右侧滑入 */
+        "app-plus": {
+          "animationType": "slide-in-right",
+          "animationDuration": 300
+        }
       }
     },
     {

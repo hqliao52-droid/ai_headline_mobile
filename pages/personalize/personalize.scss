@@ -1,3 +1,121 @@
+/* ==================== 页面转场动画 ==================== */
+
+// 整页从右侧滑入（推入效果）。
+// 只在非 App 端生效：App 用 pages.json 的原生转场，两边都做会"滑两次"。
+/* #ifndef APP-PLUS */
+@keyframes page-slide-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+/* #endif */
+
+// 首屏区块「从左往右排开」：每块先向左偏一点再落位
+@keyframes page-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-40rpx, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+// 骨架屏扫光（灰块底纹在 uni.scss 的 @mixin sk-block 里）
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+// 页面最外层：滑入时 .container 会跑到视口右侧外面，裁掉横向溢出，
+// 否则 H5 上会多出一条横向滚动条。
+// 底色和 .container 保持一致：滑入过程中露出来的那一条才不会白一下
+.page-root {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: #f5f7fa;
+}
+
+.page-enter {
+  /* #ifndef APP-PLUS */
+  animation: page-slide-in 0.34s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+  /* #endif */
+
+  // 区块依次落位。fill-mode 用 backwards：动画结束后元素回到常态，
+  // 不会留下 transform（留下会变成 fixed 子元素的定位参照，弹窗会错位）
+  .anim-item {
+    animation: page-item-in 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  }
+
+  // 七个区块每块错开 40ms，形成自上而下「依次摊开」的节奏
+  .anim-1 { animation-delay: 0.04s; }
+  .anim-2 { animation-delay: 0.08s; }
+  .anim-3 { animation-delay: 0.12s; }
+  .anim-4 { animation-delay: 0.16s; }
+  .anim-5 { animation-delay: 0.2s; }
+  .anim-6 { animation-delay: 0.24s; }
+  .anim-7 { animation-delay: 0.28s; }
+}
+
+/* ==================== 骨架屏 ==================== */
+// 灰块的样子统一来自 uni.scss 的 @mixin sk-block，这里只补尺寸与排布
+.sk-bar {
+  @include sk-block;
+}
+
+// 卡片标题前的图标占位
+.sk-icon {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 10rpx;
+  border-radius: 50%;
+}
+
+// 卡片标题文字占位
+.sk-card-title {
+  width: 240rpx;
+  height: 32rpx;
+}
+
+// 表单行骨架：左标签 + 右控件，与真表单的排布一致
+.sk-form-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40rpx;
+}
+
+.sk-label {
+  width: 220rpx;
+  height: 28rpx;
+}
+
+.sk-field {
+  width: 220rpx;
+  height: 60rpx;
+  border-radius: 12rpx;
+}
+
+// 权重卡片：一行标题 + 一条"滑块"
+.sk-weight-item {
+  margin-bottom: 30rpx;
+}
+
+.sk-slider {
+  width: 100%;
+  height: 36rpx;
+  margin-top: 16rpx;
+  border-radius: 18rpx;
+}
+
 .container {
   min-height: 100vh;
   background-color: #f5f7fa;
@@ -68,6 +186,24 @@
       color: #666;
       margin-bottom: 20rpx;
       margin-left: 20rpx;
+    }
+  }
+
+  /* 配置接口失败：可点的重试条，别让页面一直停在骨架上 */
+  .config-error {
+    margin-bottom: 20rpx;
+    padding: 24rpx;
+    border-radius: 20rpx;
+    background-color: #fdeeee;
+    text-align: center;
+
+    text {
+      font-size: 26rpx;
+      color: #e74c3c;
+    }
+
+    &:active {
+      opacity: 0.7;
     }
   }
 

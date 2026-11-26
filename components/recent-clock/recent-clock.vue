@@ -58,6 +58,24 @@
         </scroll-view>
       </view>
     </template>
+
+    <!-- 一键清除的二次确认：自绘弹窗。
+         不能用 uni.showModal——H5 端它的 z-index 是 999，会被浮层（1010/1011）压住 -->
+    <template v-if="confirmVisible">
+      <view class="recent-confirm-mask" @click="cancelClear" @touchmove.stop.prevent></view>
+      <view class="recent-confirm">
+        <view class="confirm-title">清空最近看过</view>
+        <view class="confirm-desc">清空后无法恢复，确定清除全部记录吗？</view>
+        <view class="confirm-actions">
+          <view class="confirm-btn" @click="cancelClear">
+            <text class="confirm-btn-text">取消</text>
+          </view>
+          <view class="confirm-btn is-primary" @click="doClearAll">
+            <text class="confirm-btn-text">确定</text>
+          </view>
+        </view>
+      </view>
+    </template>
   </view>
 </template>
 

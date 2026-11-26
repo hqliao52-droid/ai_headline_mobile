@@ -27,6 +27,29 @@ $shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
   }
 }
 
+// 骨架屏扫光：渐变背景横向移动，一眼就能看出「内容正在路上」而不是页面坏了
+// （灰块本身的底色 / 圆角 / 动画定义在 uni.scss 的 @mixin sk-block 里，各页面共用）
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+// 真卡片出现时的轻微上浮：从骨架切到真内容时不会"啪"地一下换掉
+@keyframes news-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12rpx, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .container {
   min-height: 100vh;
   // 页面底色：冷调浅灰白，白色卡片浮在上面
@@ -564,6 +587,15 @@ $shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
         background-color: $brand;
         color: #ffffff;
       }
+
+      // 骨架胶囊：等分类接口时先把位置占住。
+      // 宽高按真实胶囊的排版尺寸写死，接口回来换成真标签时这一行高度几乎不变
+      &.is-skeleton {
+        @include sk-block;
+        width: 140rpx;
+        height: 74rpx;
+        padding: 0;
+      }
     }
   }
 
@@ -671,6 +703,18 @@ $shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
       // 让摘要块的底部圆角跟着卡片一起裁切
       overflow: hidden;
       box-sizing: border-box;
+      // 按下去的即时反馈：页面切换有动画，手指这边也要立刻看到「点到了」，
+      // 否则会有"点了没反应"的错觉
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+      // 卡片首次渲染 / 加载更多时轻微上浮淡入，替换骨架屏时不会硬闪。
+      // fill-mode 必须用 backwards：用 both 的话动画终态会一直压着，
+      // 上面 :active 的按下缩放就永远不生效了
+      animation: news-item-in 0.28s ease-out backwards;
+
+      &:active {
+        transform: scale(0.985);
+        box-shadow: 0 2rpx 8rpx rgba(22, 32, 46, 0.08);
+      }
 
       .news-main {
         flex: 1;
@@ -742,6 +786,49 @@ $shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
         flex-shrink: 0;
         background-image: linear-gradient(135deg, #dce7f7 0%, #b9cdec 100%);
       }
+
+      // ---------- 首屏骨架 ----------
+      // 卡片外壳直接沿用 .news-item（白底 / 圆角 / 投影 / 内边距都一致），
+      // 只把里面的文字换成灰块，所以骨架和真卡片用的是同一套排版，
+      // 数据回来原地替换，高度基本不动
+      &.is-skeleton {
+        // 所有灰块共用同一套扫光底纹，尺寸由下面逐条给
+        .sk-bar {
+          @include sk-block;
+        }
+
+        .sk-source {
+          width: 120rpx;
+          height: 26rpx;
+        }
+
+        .sk-time {
+          width: 150rpx;
+          height: 26rpx;
+        }
+
+        .sk-title {
+          width: 100%;
+          height: 34rpx;
+          margin-bottom: 16rpx;
+        }
+
+        // 第二行短一点，看着才像「两行标题」
+        .sk-title-second {
+          width: 62%;
+        }
+
+        .sk-summary {
+          width: 92%;
+          height: 26rpx;
+          margin-bottom: 12rpx;
+        }
+
+        .sk-summary-second {
+          width: 54%;
+          margin-bottom: 0;
+        }
+      }
     }
 
     .load-status {
@@ -749,6 +836,16 @@ $shadow-brand: 0 12rpx 28rpx rgba(30, 95, 196, 0.22); // Banner 淡蓝投影
       padding: 36rpx 0;
       font-size: 26rpx;
       color: $text-muted;
+    }
+
+    // 首屏失败时的重试入口：做成一条可点的品牌蓝提示，别留一片空白
+    .load-status.is-error {
+      color: $brand;
+      padding: 48rpx 0;
+
+      &:active {
+        opacity: 0.6;
+      }
     }
   }
 

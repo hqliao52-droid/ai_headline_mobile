@@ -9,6 +9,10 @@ export default {
       rss_id: '',
       newsData: {},
       news_title: '',
+      // 详情接口是否还在路上：为 true 时正文 / 摘要 / 关键词都用骨架屏占位
+      detailLoading: true,
+      // 详情接口是否失败：失败时给一条可点的重试，而不是让骨架屏一直转
+      detailError: false,
       // AI核心摘要列表
       aiSummaryList: [],
       // 文章标签
@@ -59,9 +63,28 @@ export default {
     this.rss_id = options.rss_id;
     console.log('news_id:', this.news_id)
 
+    // 首页跳转时把列表里已经渲染过的标题 / 来源顺手递了过来：
+    // 先填上，用户点进来第一眼看到的就是真标题，而不是一块灰的骨架
+    // （真正的正文、摘要仍然以详情接口为准，回来后直接覆盖）
+    const channel = typeof this.getOpenerEventChannel === 'function'
+      ? this.getOpenerEventChannel()
+      : null;
+    if (channel && typeof channel.on === 'function') {
+      channel.on('newsPreview', (payload) => {
+        if (!payload) return;
+        if (payload.title) this.news_title = payload.title;
+        if (payload.rss_tag) this.rss_name = payload.rss_tag;
+      });
+    }
+
     this.getNewsDetail(this.news_id, this.rss_id);
   },
   computed: {
+    // 摘要骨架：只有"还在加载且没失败"时才显示，
+    // 失败时换成重试条，避免骨架一直转、看着像卡死
+    summarySkeleton() {
+      return this.detailLoading && !this.detailError;
+    },
     processedContent() {
       if (!this.content) return '';
 
@@ -231,6 +254,10 @@ export default {
       uni.showToast({ title: "配置推送规则", icon: "none" });
     },
     async getNewsDetail() {
+      // 每次进入都先回到「加载中」：重试时骨架屏要能重新出现，
+      // 而不是先显示上一次的空白/错误状态再跳一下
+      this.detailLoading = true
+      this.detailError = false
       try {
         const res = await request({
           url: '/news_detail/get_detail_by_id?id=' + this.news_id,
@@ -245,9 +272,12 @@ export default {
             this.keywordList = res.data.ai_origin_output?.keywords || [];
             // 如果关键词列表更新了，立即更新一次显示，防止前3秒显示空或默认值
             this.updateRandomKeyword();
-            if (res.data.ai_origin_output.policy_risk.market_risk !== "未提及") {
-              this.market_risk = res.data.ai_origin_output?.policy_risk.market_risk || '';
-              this.policy_compliance = res.data.ai_origin_output?.policy_risk.policy_compliance || '';
+            // 风险字段可能整块缺失：用可选链兜底，
+            // 否则这里一抛错，外层 catch 会把「已经拿到的正文」也判成失败
+            const policyRisk = res.data.ai_origin_output?.policy_risk || {};
+            if (policyRisk.market_risk && policyRisk.market_risk !== "未提及") {
+              this.market_risk = policyRisk.market_risk;
+              this.policy_compliance = policyRisk.policy_compliance || '';
               this.risk = true;
             }
             const detail = res.data;
@@ -284,10 +314,26 @@ export default {
             }
 
           }
+        } else {
+          // 业务码不对时按失败处理，否则页面会一直停在骨架屏上，用户不知道发生了什么
+          throw new Error(res.msg || '详情加载失败')
         }
       } catch (err) {
         console.error('请求新闻失败：', err)
+        this.detailError = true
+      } finally {
+        // 不管成功还是失败都要收起骨架屏：
+        // 成功 → 换成真内容；失败 → 由 detailError 换成「点击重试」
+        this.detailLoading = false
       }
+    },
+    /**
+     * 加载失败后重试
+     * 用 getNewsDetail 而不是重新 navigateTo：页面栈不变，返回键行为也不会乱
+     */
+    reloadDetail() {
+      if (this.detailLoading) return
+      this.getNewsDetail()
     }
   }
 };

@@ -6,6 +6,11 @@ export default {
     return {
       updated_at: null,
       isUpdate: true,
+      // 配置接口是否还在路上：为 true 时两张卡片都用骨架屏占位，
+      // 免得先把默认值（12 条/日、空邮箱）画出来，数据回来再整体跳一下
+      configLoading: true,
+      // 配置接口是否失败：失败时给一条可点的重试
+      configError: false,
       // 推送数量
       showHint: false,
       hintTimer: null,
@@ -85,9 +90,11 @@ export default {
       this.countdown = 0;
     },
     async getUserConfig() {
+      // 骨架屏本身就是加载态：不再弹全屏 Loading 遮罩。
+      // 遮罩会把整页盖住，用户既看不到页面结构也点不了返回，等待感反而更长
+      this.configLoading = true;
+      this.configError = false;
       try {
-        uni.showLoading({ title: '加载中...' });
-
         const res = await request({
           url: '/userConfig/get_config',
           method: 'POST',
@@ -101,11 +108,15 @@ export default {
           // TODO: 下一步操作：根据 res.data 初始化页面数据
           // 例如：
           if (res.data != null) {
+            // channels 可能是空数组：直接取 [0] 会抛错，
+            // 一抛错就会把「已经拿到的配置」整体判成失败
+            const channels = res.data.channels || [];
+            const channelAddress = channels[0]?.channel_address || '';
             this.pushCount = res.data.max_push_amount;
             this.selectedCategories = res.data.weights || [];
-            this.email = res.data.channels[0].channel_address || '';
+            this.email = channelAddress;
             this.updated_at = res.data.updated_at;
-            if (res.data.channels[0].channel_address != null) {
+            if (channelAddress) {
               this.isChanged = false;
               this.verifyStatus = 'success';
             }
@@ -113,15 +124,27 @@ export default {
           }
 
         } else {
+          // 业务码不对：标记失败，页面顶部会出现「点击重试」
+          this.configError = true;
           uni.showToast({ title: res.msg || '获取配置失败', icon: 'none' });
         }
       } catch (err) {
         console.error('获取用户配置失败：', err);
+        this.configError = true;
         uni.showToast({ title: '网络异常', icon: 'none' });
         this.isFirstEdit = true;
       } finally {
-        uni.hideLoading();
+        // 成功失败都要收起骨架屏，否则会一直停在加载态
+        this.configLoading = false;
       }
+    },
+    /**
+     * 配置加载失败后重试
+     * 只重新拉配置，不整页重进：页面栈不变，用户已填的内容也不会丢
+     */
+    reloadConfig() {
+      if (this.configLoading) return;
+      this.getUserConfig();
     },
     async openCategoryModal() {
       try {
@@ -318,12 +341,6 @@ export default {
           this.timer = null;
         }
       }, 1000);
-    },
-    onUnload() {
-      if (this.timer) {
-        clearInterval(this.timer);
-        this.timer = null;
-      }
     },
     // 查看示例
     viewExample() {

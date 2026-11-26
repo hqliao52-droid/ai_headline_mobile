@@ -7,6 +7,8 @@ import 'highlight.js/styles/atom-one-light.css';
 import { onLoad } from 'uview-ui/libs/mixin/mixin';
 import { uploadSingleSpeciallyFile } from "@/utils/uploadFile.js"
 import { openChatStream } from '@/utils/chat-socket.js';
+// 底部 tab 切换的进入动画：每次 onShow 重新算一次方向
+import { resolveTabEnterClass } from '@/utils/tab-transition.js';
 
 export default {
   data() {
@@ -74,11 +76,16 @@ export default {
       showRecentFilesList: false,
       attachedFiles: [],
 
+      // tab 切换时的进入动画 class，由 onShow 里重新计算（见 utils/tab-transition.js）
+      tabEnterClass: '',
+
     };
   },
   onShow() {
     this.loadUserInfo();
     this.loadRecentHistory();
+    // tab 切换动画：原生 tabBar 没有转场，靠这里给消息区重新播一遍进入动画
+    this.tabEnterClass = resolveTabEnterClass('/pages/ai-chat/ai-chat');
     this.$nextTick(() => {
       this.initDefaultSession();
     });

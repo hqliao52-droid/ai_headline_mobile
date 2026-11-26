@@ -14,8 +14,11 @@
       </view>
     </view>
 
-    <!-- 聊天列表区域 -->
-    <scroll-view class="chat-content" scroll-y :scroll-top="scrollTop" scroll-with-animation>
+    <!-- 聊天列表区域
+         这里只给消息区加切换动画：顶栏和底部输入框是 fixed 的，
+         被 transform 的祖先会变成它们的定位参照，动画期间会被甩偏。
+         它们本来也不该跟着动——聊天页切过来时"框不动、内容进来"更自然 -->
+    <scroll-view class="chat-content" :class="tabEnterClass" scroll-y :scroll-top="scrollTop" scroll-with-animation>
       <!-- <view class="time-divider">今天</view> -->
 
       <view v-for="(msg, index) in messageList" :key="index" class="message-item" :class="{ 'user-msg': msg.role === 'user', 'ai-msg': msg.role === 'assistant' }">

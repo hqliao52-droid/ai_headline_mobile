@@ -2,6 +2,8 @@ import { request } from '@/utils/request.js'
 import { getUserInfo } from '@/utils/user.js';
 // 「刚才看过」入口：时钟 + 最近看过浮层（显式注册，不依赖 easycom 扫描）
 import RecentClock from '@/components/recent-clock/recent-clock.vue';
+// 底部 tab 切换的进入动画：每次 onShow 重新算一次方向
+import { resolveTabEnterClass } from '@/utils/tab-transition.js';
 
 export default {
   components: {
@@ -18,6 +20,12 @@ export default {
       hasUser: false,
       categories: [],
       newsList: [],
+      // 分类接口是否还在路上：为 true 且列表为空时展示骨架胶囊
+      categoriesLoading: false,
+      // 首屏新闻请求是否失败（只在列表为空时才展示重试入口）
+      newsLoadFailed: false,
+      // tab 切换时的进入动画 class，由 onShow 里重新计算（见 utils/tab-transition.js）
+      tabEnterClass: '',
 
       // 分页状态
       page: 1,
@@ -68,6 +76,12 @@ export default {
     this.getCategories() // 获取分类
   },
   computed: {
+    // 首屏骨架：列表一条都还没有、请求又在路上时，用骨架卡片占住位置
+    // 注意必须带上 !newsLoadFailed：失败后 isLoading 已经回落，
+    // 但列表仍是空的，此时该显示"点击重试"而不是一直转骨架
+    showNewsSkeleton() {
+      return this.newsList.length === 0 && this.isLoading && !this.newsLoadFailed
+    },
     // 头部问候语：按当前时间段变化
     greeting() {
       const hour = new Date().getHours()
@@ -233,6 +247,9 @@ export default {
   onShow(){
     // 每次页面显示时重新获取最新用户信息
     this.loadUserInfo();
+    // tab 切换动画：原生 tabBar 没有转场，靠这里给内容区重新播一遍进入动画。
+    // 方向由 tab 顺序决定（从 AI 问答 / 个人中心切回来是"往左"，动画从左侧进来）
+    this.tabEnterClass = resolveTabEnterClass('/pages/index/index');
     // 时钟入口：从详情页 / 后台回来时刷新最近看过，并重新校准指针
     this.$nextTick(() => {
       const clock = this.$refs.recentClock;
@@ -499,6 +516,8 @@ export default {
       if (this.isLoading) return
       
       this.isLoading = true
+      // 新一次请求开始：先把上一次的失败标记清掉，否则骨架屏会被它挡住
+      this.newsLoadFailed = false
 
       // 2. 如果是加载更多，显示 Loading 提示
       if (isLoadMore) {
@@ -569,7 +588,12 @@ export default {
         }
       } catch (err) {
         console.error('请求新闻失败：', err)
-        uni.showToast({ title: '请求失败，请重试', icon: 'none' })
+        // 首屏失败：列表里已经有「点击重试」的入口，就不再叠一个 Toast 抢焦点；
+        // 加载更多失败：列表已有内容，用 Toast 提示一下即可
+        this.newsLoadFailed = true
+        if (this.newsList.length > 0) {
+          uni.showToast({ title: '请求失败，请重试', icon: 'none' })
+        }
         
         // 6. 失败回退页码，方便用户再次触底重试
         if (isLoadMore) {
@@ -585,6 +609,8 @@ export default {
     },
 
     async getCategories() { // 修正方法名拼写
+      // 分类标签区先摆骨架胶囊，避免这一行先只剩「全部」、接口回来再"长"出标签
+      this.categoriesLoading = true
       try {
         const res = await request({
           url: '/category/get_category',
@@ -594,23 +620,52 @@ export default {
         }
       } catch (err) {
         console.error("请求分类失败", err)
+      } finally {
+        this.categoriesLoading = false
       }
     },
     goToPersonalize() {
+      // 目标页整页滑入、内容依次排开的动画写在 personalize.scss 里；
+      // App 端由 pages.json 的 animationType 交给原生转场，两端不叠加
       uni.navigateTo({
         url: '/pages/personalize/personalize'
       });
     },
+    /**
+     * 打开新闻详情
+     * 除了跳转，还把列表里已经渲染出来的标题 / 来源 / 摘要顺手递给详情页：
+     * 详情页首帧就能显示真标题，而不是先看一段骨架再等接口。
+     * 接口慢的时候，这一招对「点进去是不是一片空白」的观感影响最大。
+     * @param {Object} item - 列表项
+     */
     toDetail(item) {
       uni.navigateTo({
         url: `/pages/news-detail/news-detail?id=${item.id}&rss_id=${item.rss_id}`,
         success: (res) => {
-          console.log('跳转成功', res);
+          // eventChannel 是「上一页 → 新页面」的单向数据通道，
+          // 详情页在 onLoad 里监听 newsPreview
+          if (!res.eventChannel || !res.eventChannel.emit) return;
+          res.eventChannel.emit('newsPreview', {
+            title: item.title,
+            rss_tag: item.rss_tag,
+            published_at: item.published_at,
+            one_sentence_summary: item.one_sentence_summary
+          });
         },
         fail: (err) => {
           console.error('跳转失败', err);
         }
       });
+    },
+    /**
+     * 首屏加载失败后的重试：把分页状态复位，再拉一次第一页
+     * 复位是必须的——失败时 page 可能已经因为触底加载往前走过
+     */
+    reloadNews() {
+      if (this.isLoading) return
+      this.page = 1
+      this.isFinished = false
+      this.getNewsList(false)
     },
 
     // switchTab(index) {

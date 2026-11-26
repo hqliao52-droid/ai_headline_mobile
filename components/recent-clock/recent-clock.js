@@ -5,6 +5,11 @@ import {
 } from '@/utils/history.js';
 import { getUserInfo } from '@/utils/user.js';
 
+// 浮层高度占屏幕可用高度（windowHeight）的比例。PRD 建议 0.3，实测 0.4 更好用
+const SHEET_HEIGHT_RATIO = 0.4;
+// 浮层最小高度(px)：小屏手机按比例算出来太矮时兜底
+const SHEET_MIN_HEIGHT = 180;
+
 // 补零：9 → '09'
 function pad(value) {
   return value < 10 ? '0' + value : '' + value;
@@ -39,6 +44,8 @@ export default {
       historyList: [],
       // 浮层是否展开
       sheetVisible: false,
+      // 一键清除的二次确认是否展开
+      confirmVisible: false,
       // 浮层高度：屏幕高度的 30%，进页面时按 windowHeight 算好（不用 vh，各端更稳）
       sheetHeight: 0,
       // 列表区高度：浮层高度减去标题栏（scroll-view 在小程序端需要确定高度）
@@ -115,8 +122,8 @@ export default {
   methods: {
     /**
      * 算浮层与列表区高度
-     * 浮层 = 屏幕高度的 30%，用 windowHeight（页面可用区，已扣掉 TabBar）而不是
-     * screenHeight，这样浮层不会压在 TabBar 上；取不到时按 667 兜底
+     * 浮层 = 屏幕可用高度 × SHEET_HEIGHT_RATIO，用 windowHeight（已扣掉 TabBar）
+     * 而不是 screenHeight，这样浮层不会压在 TabBar 上；取不到时按 667 兜底
      * 列表区 = 浮层高度 - 标题栏高度，scroll-view 在小程序端必须有确定高度
      */
     initSheetSize() {
@@ -129,13 +136,16 @@ export default {
       } catch (e) {
         console.error('读取屏幕高度失败', e);
       }
-      const sheetHeight = Math.max(Math.round(windowHeight * 0.3), 180);
+      const sheetHeight = Math.max(
+        Math.round(windowHeight * SHEET_HEIGHT_RATIO),
+        SHEET_MIN_HEIGHT
+      );
       const headerHeight = Math.round(uni.upx2px(92));
       this.sheetHeight = sheetHeight;
       this.sheetBodyHeight = Math.max(sheetHeight - headerHeight, 0);
     },
 
-    /* ------------------------- 时钟 ------------------------- */
+    /*  时钟  */
 
     /**
      * 读取系统时间，算出两根指针的基准角（0~360）
@@ -233,20 +243,23 @@ export default {
     },
     closeSheet() {
       this.sheetVisible = false;
+      // 浮层收起时顺手把确认弹窗也关掉，避免下次打开浮层时它又冒出来
+      this.confirmVisible = false;
     },
-    // 一键清除：带二次确认
+    // 一键清除：先弹自绘的二次确认
     onClearAll() {
       if (this.historyList.length === 0) return;
-      uni.showModal({
-        title: '清空最近看过',
-        content: '清空后无法恢复，确定清除全部记录吗？',
-        confirmColor: '#2981F0',
-        success: (res) => {
-          if (!res.confirm) return;
-          clearReadHistory(this.currentUserId());
-          this.refreshHistory();
-        }
-      });
+      this.confirmVisible = true;
+    },
+    // 取消清除：只关弹窗，浮层和记录都保留
+    cancelClear() {
+      this.confirmVisible = false;
+    },
+    // 确认清除：清空后停在浮层里展示空态，角标同步消失
+    doClearAll() {
+      clearReadHistory(this.currentUserId());
+      this.refreshHistory();
+      this.confirmVisible = false;
     },
     // 单条删除：立即生效，角标同步刷新
     onRemoveItem(item) {
@@ -258,6 +271,15 @@ export default {
       const rssId = item.rss_id || '';
       uni.navigateTo({
         url: `/pages/news-detail/news-detail?id=${item.id}&rss_id=${rssId}`,
+        success: (res) => {
+          // 和首页列表一致：把已知的标题 / 来源递给详情页，
+          // 详情页首帧就能显示真标题，不用先看一段骨架
+          if (!res.eventChannel || !res.eventChannel.emit) return;
+          res.eventChannel.emit('newsPreview', {
+            title: item.title,
+            rss_tag: item.rss_tag
+          });
+        },
         fail: (err) => {
           console.error('打开最近看过失败', err);
           uni.showToast({ title: '打开失败，请重试', icon: 'none' });

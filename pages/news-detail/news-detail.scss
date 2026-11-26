@@ -1,3 +1,130 @@
+/* ==================== 页面转场动画 ==================== */
+
+// 整页从右侧滑入（推入效果）。
+// 只在非 App 端生效：App 是原生页面栈，转场交给 pages.json 的 animationType，
+// 两边都做会变成「滑两次」，看着反而更卡。
+/* #ifndef APP-PLUS */
+@keyframes page-slide-in {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+/* #endif */
+
+// 首屏区块「从左往右排开」：每块先向左偏一点再落位。
+// 和上面的滑入叠在一起，读起来像卡片被依次摊开，而不是整页硬闪出来。
+@keyframes page-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(-40rpx, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+// 骨架屏扫光（灰块本身的底纹 / 圆角在 uni.scss 的 @mixin sk-block 里）
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+// 骨架换成真内容时的轻微淡入：数据回来那一下不会"啪"地换掉
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// 页面最外层：滑入时 .container 会跑到视口右侧外面，
+// 这里把横向溢出裁掉，否则 H5 上会多出一条横向滚动条。
+// 底色和 .container 保持一致：滑入过程中露出来的那一条才不会白一下
+.page-root {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: #f5f7fa;
+}
+
+.page-enter {
+  /* #ifndef APP-PLUS */
+  animation: page-slide-in 0.34s cubic-bezier(0.32, 0.72, 0, 1) backwards;
+  /* #endif */
+
+  // 内部区块依次落位。
+  // fill-mode 用 backwards 而不是 both：动画结束后元素回到常态，
+  // 不会留下 transform——留下的话它会变成 fixed 子元素的定位参照
+  .anim-item {
+    animation: page-item-in 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  }
+
+  // 每块错开 60ms，形成「一块接一块摊开」的节奏
+  .anim-1 { animation-delay: 0.06s; }
+  .anim-2 { animation-delay: 0.12s; }
+  .anim-3 { animation-delay: 0.18s; }
+  .anim-4 { animation-delay: 0.24s; }
+}
+
+/* ==================== 骨架屏 ==================== */
+// 灰块的样子（底色 / 圆角 / 扫光）统一来自 uni.scss 的 @mixin sk-block，
+// 这里只补每一处的尺寸：改风格时三个页面一起变，不用挨个改
+.sk-bar {
+  @include sk-block;
+}
+
+// 摘要列表前的圆形占位，对应真数据里的 ✓ 圆圈
+.sk-dot {
+  @include sk-block;
+  width: 30rpx;
+  height: 30rpx;
+  margin-right: 16rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+// 标题骨架：两行，第二行短一点才像标题
+.sk-h1 {
+  width: 100%;
+  height: 40rpx;
+  margin-bottom: 18rpx;
+}
+
+.sk-h1-second {
+  width: 66%;
+}
+
+// 来源 / 字数那一行
+.sk-meta {
+  width: 160rpx;
+  height: 26rpx;
+  margin-right: 20rpx;
+}
+
+// 正文段落行
+.sk-paragraph {
+  height: 28rpx;
+  margin-bottom: 18rpx;
+}
+
+// 关键词胶囊
+.sk-chip {
+  @include sk-block;
+  width: 120rpx;
+  height: 48rpx;
+  border-radius: 30rpx;
+  margin: 0 16rpx 16rpx 0;
+}
+
 .container {
   background-color: #f5f7fa;
   min-height: 100vh;
@@ -22,6 +149,24 @@
     .nav-title {
       font-size: 34rpx;
       font-weight: 500;
+    }
+  }
+
+  /* 详情接口失败：可点的重试条，比一直转骨架屏诚实得多 */
+  .detail-error {
+    margin: 20rpx 30rpx;
+    padding: 24rpx;
+    border-radius: 16rpx;
+    background-color: #fdeeee;
+    text-align: center;
+
+    text {
+      font-size: 26rpx;
+      color: #e74c3c;
+    }
+
+    &:active {
+      opacity: 0.7;
     }
   }
 
@@ -58,6 +203,8 @@
       .summary-item {
         display: flex;
         margin-bottom: 16rpx;
+        // 真摘要逐条淡入（骨架条换掉的那一下不会硬闪）
+        animation: content-fade-in 0.24s ease-out backwards;
 
         .check-icon {
           width: 30rpx;
@@ -131,6 +278,13 @@
       font-size: 36rpx;
       font-weight: bold;
       line-height: 1.4;
+      margin-bottom: 20rpx;
+      // 标题从「上一页递过来的」或「接口返回的」变过来时淡入一下
+      animation: content-fade-in 0.24s ease-out backwards;
+    }
+
+    // 标题骨架的容器：间距与真标题一致，数据回来时下面的内容不会上下跳
+    .article-title-skeleton {
       margin-bottom: 20rpx;
     }
 
@@ -216,6 +370,8 @@
         border-radius: 30rpx;
         margin-right: 16rpx;
         margin-bottom: 16rpx;
+        // 与摘要同理：真关键词逐个淡入，替换骨架时不硬闪
+        animation: content-fade-in 0.24s ease-out backwards;
       }
     }
   }
@@ -363,21 +519,25 @@
     }
   }
 
-  /* 底部输入框 */
-  .bottom-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #ffffff;
-    z-index: 999; /* 确保在最上层 */
-    box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.05); /* 可选：加一点顶部阴影增加层次感 */
+} // .container 到此结束：下面两个 fixed 元素不参与页面滑入动画
 
-    .input-area {
-      display: flex;
-      align-items: center;
-      padding: 20rpx 30rpx;
-      background-color: #ffffff;
+/* 底部输入框：fixed 定位必须挂在 .page-root 下。
+   .container 上有 transform 动画，会成为 fixed 子元素的定位参照，
+   放在里面的话，滑入的那 340ms 里输入栏会被甩到页面最底部 */
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #ffffff;
+  z-index: 999; /* 确保在最上层 */
+  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.05); /* 可选：加一点顶部阴影增加层次感 */
+
+  .input-area {
+    display: flex;
+    align-items: center;
+    padding: 20rpx 30rpx;
+    background-color: #ffffff;
     // margin-top: 20rpx;
 
     .avatar {
@@ -423,60 +583,61 @@
       }
     }
   }
-  }
-  
+}
 
-  .hint-text {
-    font-size: 24rpx;
-    color: #999;
-    margin-top: 10rpx;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: nowrap; /* 防止换行 */
+.hint-text {
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap; /* 防止换行 */
+  overflow: hidden;
+
+  &.clickable {
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:active {
+      opacity: 0.7; // 点击时稍微变透明，提供反馈
+    }
+  }
+
+  .hint-prefix, .hint-suffix {
+    white-space: nowrap;
+  }
+
+  .keyword-roller {
+    display: inline-block;
+    height: 32rpx; /* 根据字体大小调整高度，确保能容纳一行文字 */
+    line-height: 32rpx;
     overflow: hidden;
-
-    &.clickable {
-      cursor: pointer;
-      transition: opacity 0.2s;
-      
-      &:active {
-        opacity: 0.7; // 点击时稍微变透明，提供反馈
-      }
-    }
-
-    .hint-prefix, .hint-suffix {
-      white-space: nowrap;
-    }
-    .keyword-roller {
-      display: inline-block;
-      height: 32rpx; /* 根据字体大小调整高度，确保能容纳一行文字 */
-      line-height: 32rpx;
-      overflow: hidden;
-      position: relative;
-      min-width: 60rpx; /* 最小宽度，防止太短导致抖动 */
-      text-align: center;
-      vertical-align: bottom; /* 与前后文字对齐 */
-    }
-    .rolling-keyword {
-      display: block;
-      color: #576b95; /* 高亮颜色，可选 */
-      font-weight: bold;
-      white-space: nowrap;
-    }
-    .animate-slide-up {
-      animation: slideUpFade 0.5s ease-in-out forwards;
-    }
-    @keyframes slideUpFade {
-      0% {
-        opacity: 0;
-        transform: translateY(100%); /* 从下方进入 */
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0); /* 到达正常位置 */
-      }
+    position: relative;
+    min-width: 60rpx; /* 最小宽度，防止太短导致抖动 */
+    text-align: center;
+    vertical-align: bottom; /* 与前后文字对齐 */
   }
 
+  .rolling-keyword {
+    display: block;
+    color: #576b95; /* 高亮颜色，可选 */
+    font-weight: bold;
+    white-space: nowrap;
+  }
+
+  .animate-slide-up {
+    animation: slideUpFade 0.5s ease-in-out forwards;
+  }
+
+  @keyframes slideUpFade {
+    0% {
+      opacity: 0;
+      transform: translateY(100%); /* 从下方进入 */
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0); /* 到达正常位置 */
+    }
   }
 }

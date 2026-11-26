@@ -290,3 +290,79 @@ $danger: #fc4e52; // 告警红：角标底色
     }
   }
 }
+
+// 一键清除的二次确认：层级压在所有浮层之上（遮罩 1020 / 弹窗 1021），
+// 不再依赖 uni.showModal——它 H5 端只有 z-index 999，会被浮层盖住
+.recent-confirm-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(22, 32, 46, 0.4);
+  z-index: 1020;
+  animation: recent-mask-in 0.2s ease;
+}
+
+.recent-confirm {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 560rpx;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  border-radius: 24rpx;
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  z-index: 1021;
+  box-shadow: 0 12rpx 48rpx rgba(22, 32, 46, 0.18);
+
+  .confirm-title {
+    padding: 40rpx 40rpx 0;
+    font-size: 32rpx;
+    font-weight: 700;
+    color: $text-title;
+    text-align: center;
+  }
+
+  .confirm-desc {
+    padding: 20rpx 40rpx 40rpx;
+    font-size: 26rpx;
+    line-height: 1.5;
+    color: $text-muted;
+    text-align: center;
+  }
+
+  // 两个按钮等宽，中间用极浅分隔线切开
+  .confirm-actions {
+    display: flex;
+    border-top: 1rpx solid $line;
+  }
+
+  .confirm-btn {
+    flex: 1;
+    height: 96rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    & + .confirm-btn {
+      border-left: 1rpx solid $line;
+    }
+
+    .confirm-btn-text {
+      font-size: 30rpx;
+      color: $text-title;
+    }
+
+    // 主按钮：品牌蓝
+    &.is-primary .confirm-btn-text {
+      color: $brand;
+      font-weight: 700;
+    }
+
+    &:active {
+      background-color: #f7fafd;
+    }
+  }
+}

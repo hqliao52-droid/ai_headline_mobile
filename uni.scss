@@ -78,3 +78,20 @@ $uni-color-subtitle: #555555; // 二级标题颜色
 $uni-font-size-subtitle:26px;
 $uni-color-paragraph: #3F536E; // 文章段落颜色
 $uni-font-size-paragraph:15px;
+
+/* 骨架屏基元：等待接口返回时用来占位的灰块（首页 / 新闻详情 / 定制化情报共用）
+ *
+ * 用「渐变 + 横向位移」做出从左往右扫光的效果，比一块静止的灰色更能说明
+ * 「内容正在路上」，也不会像转圈 Loading 那样挡住整页操作。
+ *
+ * 用法：在页面的 <view> 上用 @include sk-block，再在页面 SCSS 里覆写宽高。
+ * 注意：@keyframes skeleton-shimmer 没有放在这里——uni.scss 会被注入到每个页面，
+ * 放这里会把同一段动画复制进所有页面的 CSS，所以由用到它的页面各自定义。
+ */
+@mixin sk-block {
+  border-radius: 8rpx;
+  background-color: #eef2f8;
+  background-image: linear-gradient(90deg, #eef2f8 25%, #e3eaf5 37%, #eef2f8 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
