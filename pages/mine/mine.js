@@ -1,5 +1,5 @@
 import { request } from '@/utils/request.js';
-import { getUserInfo } from '@/utils/user.js';
+import { getUserInfo, clearLoginStatus } from '@/utils/user.js';
 import { uploadSingleSpeciallyFile } from '@/utils/uploadFile.js';
 // 底部 tab 切换的进入动画：每次 onShow 重新算一次方向
 import { resolveTabEnterClass } from '@/utils/tab-transition.js';
@@ -190,7 +190,9 @@ export default {
         })
         if (res.code === '200' || res.code === 200) {
           uni.showToast({ title: '退出登录成功', icon: 'success' })
-          uni.removeStorageSync('token');
+          // token 和 userInfo 必须一起清：只清 token 会留下「有用户信息、没有凭证」的中间态，
+          // 其它页面看到 userInfo 还在就会继续发鉴权请求，然后全部 401「未登录」
+          clearLoginStatus();
           uni.reLaunch({
             url: '/pages/login/login'
           })

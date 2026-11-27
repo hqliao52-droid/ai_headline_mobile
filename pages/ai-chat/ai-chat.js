@@ -1,5 +1,5 @@
 import { request } from '@/utils/request.js';
-import { getUserInfo } from '@/utils/user.js';
+import { getUserInfo, clearLoginStatus } from '@/utils/user.js';
 import { getReadHistory, MAX_HISTORY_COUNT } from '@/utils/history.js';
 import { streamRequest } from '@/utils/stream-request.js';
 import hljs from 'highlight.js';
@@ -9,12 +9,15 @@ import { uploadSingleSpeciallyFile } from "@/utils/uploadFile.js"
 import { openChatStream } from '@/utils/chat-socket.js';
 // 底部 tab 切换的进入动画：每次 onShow 重新算一次方向
 import { resolveTabEnterClass } from '@/utils/tab-transition.js';
+// 引用计数的 Loading：并发请求下 show/hide 才配得上对
+import { showLoading, hideLoading, resetLoading } from '@/utils/loading.js';
 
 export default {
   data() {
     return {
       userInfo: null,
-      newSessionWindowLoading: true,
+      // 抽屉「新建」防连点
+      creatingSession: false,
       // 聊天消息列表
       messageList: [],
       nikeName: '',
@@ -30,10 +33,6 @@ export default {
       inputText: '',
       lastDeletedText: '',
 
-      textareaHeight: 50,
-      maxLines: 4,
-      lineHeight: 40,
-
       currentSessionId: null,
       isStreaming: false,
       statusText: '',
@@ -44,23 +43,23 @@ export default {
 
       // u-parse 的标签样式，用于在富文本里保持与气泡一致的字体/换行/列表展示
       bubbleTagStyle: {
-        h1: 'margin:10rpx 0;padding:0;font-size:34rpx;font-weight:700;line-height:1.4;',
-        h2: 'margin:8rpx 0;padding:0;font-size:32rpx;font-weight:600;line-height:1.4;',
-        h3: 'margin:6rpx 0;padding:0;font-size:30rpx;font-weight:600;line-height:1.4;',
-        h4: 'margin:4rpx 0;padding:0;font-size:28rpx;font-weight:600;line-height:1.4;',
-        h5: 'margin:4rpx 0;padding:0;font-size:26rpx;font-weight:600;line-height:1.4;',
-        h6: 'margin:4rpx 0;padding:0;font-size:24rpx;font-weight:600;line-height:1.4;color:#666;',
+        h1: 'margin:12rpx 0;padding:0;font-size:36rpx;font-weight:700;line-height:1.4;color:#16202E;',
+        h2: 'margin:10rpx 0;padding:0;font-size:34rpx;font-weight:600;line-height:1.4;color:#16202E;',
+        h3: 'margin:8rpx 0;padding:0;font-size:32rpx;font-weight:600;line-height:1.4;color:#16202E;',
+        h4: 'margin:6rpx 0;padding:0;font-size:30rpx;font-weight:600;line-height:1.4;color:#16202E;',
+        h5: 'margin:6rpx 0;padding:0;font-size:28rpx;font-weight:600;line-height:1.4;color:#16202E;',
+        h6: 'margin:6rpx 0;padding:0;font-size:26rpx;font-weight:600;line-height:1.4;color:#5A6B82;',
 
-        p: 'margin:0;padding:0;font-size:28rpx;line-height:1.6;word-break:break-all;',
+        p: 'margin:0;padding:0;font-size:30rpx;line-height:1.65;color:#16202E;word-break:break-word;',
         br: 'display:block;',
         strong: 'font-weight:700;',
         em: 'font-style:italic;',
         ol: 'margin:0;padding-left:44rpx;',
         ul: 'margin:0;padding-left:44rpx;',
-        li: 'margin:4rpx 0;',
+        li: 'margin:6rpx 0;font-size:30rpx;line-height:1.65;',
 
-        pre: 'background:#f6f8fa;padding:16rpx;border-radius:8rpx;overflow-x:auto;margin:10rpx 0;',
-        code: 'font-family:monospace;font-size:24rpx;background:#f0f0f0;padding:2rpx 6rpx;border-radius:4rpx;'
+        pre: 'background:#F1F5FB;padding:16rpx;border-radius:12rpx;overflow-x:auto;margin:10rpx 0;',
+        code: 'font-family:monospace;font-size:26rpx;background:#EAF2FE;color:#0146AD;padding:2rpx 6rpx;border-radius:4rpx;'
       },
 
       scrollTop: 0,
@@ -81,7 +80,16 @@ export default {
 
     };
   },
+  computed: {
+    // 输入框有内容才能发送（PRD 4.3：为空时发送按钮置灰不可点）。
+    // 流式回复期间也置灰：同一时刻只允许一轮问答
+    canSend() {
+      return !!(this.inputText && this.inputText.trim()) && !this.isStreaming;
+    }
+  },
   onShow() {
+    // 先刷新用户信息再决定要不要拉会话：token 被清掉后（退出登录、401 统一处理）
+    // userInfo 可能还残留，这里会一并判掉，避免带着空 token 去请求
     this.loadUserInfo();
     this.loadRecentHistory();
     // tab 切换动画：原生 tabBar 没有转场，靠这里给消息区重新播一遍进入动画
@@ -96,9 +104,14 @@ export default {
   onUnload() {
     // 离开页面时断开聊天流，避免后台空跑连接
     this.closeChatStream();
+    // Loading 计数兜底清零：页面都走了还挂着 Loading 会把全局 Loading 卡死
+    resetLoading();
   },
 
   methods: {
+    // 遮罩上的 touchmove.stop.prevent 需要一个空处理器
+    noop() {},
+
     togglePlusMenu() {
       this.showPlusMenu = !this.showPlusMenu;
       // 如果关闭菜单，同时也关闭右侧文件列表
@@ -181,7 +194,7 @@ export default {
         }
 
         // 只有在成功获取到文件路径后，才显示 Loading
-        uni.showLoading({ title: '上传中...' });
+        showLoading('上传中...');
         isLoadingShown = true;
 
         // 调用单文件上传工具
@@ -217,7 +230,7 @@ export default {
       } finally {
         // 3. 只有当 Loading 真正显示过时，才执行 hideLoading
         if (isLoadingShown) {
-          uni.hideLoading();
+          hideLoading();
         }
         this.closePlusMenu();
       }
@@ -265,10 +278,7 @@ export default {
       // 2. 清空输入框
       this.inputText = '';
 
-      // 3. 重置高度
-      this.textareaHeight = 50;
-
-      // 4. 可选：给个轻微提示
+      // 3. 可选：给个轻微提示
       uni.showToast({
         title: '已暂存，可点击恢复',
         icon: 'none',
@@ -283,44 +293,12 @@ export default {
     restoreDeletedText() {
       if (this.lastDeletedText) {
         this.inputText = this.lastDeletedText;
-        // 恢复后清空暂存区，或者保留以便多次粘贴？通常清空比较好，避免混淆
-        // 这里选择保留，直到用户再次删除或手动清空，或者你可以选择清空：
-        // this.lastDeletedText = ''; 
-
-        // 重新计算高度
-        this.$nextTick(() => {
-          // 触发一次 input 事件来重新计算高度，或者直接调用 onInput 模拟
-          const mockEvent = { detail: { value: this.inputText } };
-          this.onInput(mockEvent);
-        });
       }
     },
     onInput(e) {
-      const value = e.detail.value;
-      this.inputText = value;
-
-      // 简单估算行数：根据换行符 \n 和 字符长度
-      // 这里做一个简化的估算，更精确的需要获取光标位置或渲染后测量
-      // 假设每行约 20 个中文字符（根据字体大小调整）
-      const lines = value.split('\n');
-      let estimatedLines = 0;
-
-      lines.forEach(line => {
-        // 每 25 个字符算一行（根据实际字体大小微调）
-        estimatedLines += Math.ceil(line.length / 25) || 1;
-      });
-
-      // 限制最大行数
-      if (estimatedLines > this.maxLines) {
-        estimatedLines = this.maxLines;
-      }
-
-      // 计算新高度：基础 padding + 行数 * 行高
-      // 假设 padding 上下各 20rpx，行高 40rpx
-      const newHeight = 40 + (estimatedLines * this.lineHeight);
-
-      // 更新高度
-      this.textareaHeight = newHeight;
+      // 输入框高度交给 textarea 的 auto-height 自己算，这里只同步值，
+      // 保证「有内容才能发送」的按钮态和清空按钮及时更新
+      this.inputText = e.detail.value;
     },
     toggleHistory() {
       this.isHistoryExpanded = !this.isHistoryExpanded;
@@ -666,7 +644,8 @@ export default {
           if (!msg.content) {
             // 连接结束了却一个字都没收到：服务端异常 / 服务端没部署该接口 / 断流
             console.warn('[chat] 连接已关闭但未收到任何内容', info);
-            that.$set(msg, 'content', '抱歉，出现了一些问题，请稍后重试。');
+            // 不用假文案糊住，标成失败，让用户在消息旁点重试
+            that.$set(msg, '_failed', true);
           }
           // 流结束后一次性解析成 markdown 再渲染
           that.$set(msg, 'renderedHtml', that.renderMarkdownToHtml(msg.content || ''));
@@ -681,16 +660,59 @@ export default {
 
           console.error('[chat] 聊天连接异常', err);
           const msg = that.messageList[aiIndex];
-          if (msg && !msg.content) {
-            that.$set(msg, 'content', '抱歉，出现了一些问题，请稍后重试。');
-          }
-          if (msg && !msg.renderedHtml) {
-            that.$set(msg, 'renderedHtml', that.renderMarkdownToHtml(msg.content || ''));
+          if (msg) {
+            // 已收到的部分保留，整体标为失败并提供重试入口
+            that.$set(msg, '_failed', true);
+            if (!msg.renderedHtml) {
+              that.$set(msg, 'renderedHtml', that.renderMarkdownToHtml(msg.content || ''));
+            }
           }
           uni.showToast({ title: (err && err.message) || '发送失败', icon: 'none' });
           that.scrollToBottom();
         }
       });
+    },
+
+    // 失败重试：把这条失败的回复清空，用同一个提问重新开流（不新增气泡）
+    retryMessage(index) {
+      if (this.isStreaming) {
+        uni.showToast({ title: 'AI 正在回复，请稍候', icon: 'none' });
+        return;
+      }
+
+      const msg = this.messageList[index];
+      if (!msg || msg.role !== 'assistant') return;
+
+      let userIndex = -1;
+      for (let i = index - 1; i >= 0; i--) {
+        if (this.messageList[i].role === 'user') {
+          userIndex = i;
+          break;
+        }
+      }
+      if (userIndex < 0) return;
+
+      if (!this.ensureLogin({ redirect: true })) return;
+
+      const userMsg = this.messageList[userIndex];
+      this.$set(msg, '_failed', false);
+      this.$set(msg, 'content', '');
+      this.$set(msg, 'renderedHtml', '');
+      this.$set(msg, 'reasoning', '');
+      this.$set(msg, 'reasoningMs', 0);
+      this.$set(msg, 'isReasoningExpanded', false);
+
+      this.isStreaming = true;
+      this.statusText = '正在连接...';
+      this.scrollToBottom();
+
+      this.startChatStream({
+        query: userMsg.content,
+        user_id: parseInt(this.userInfo.id),
+        session_id: this.currentSessionId || 0,
+        news_ids: userMsg._newsIds || [],
+        files: userMsg._files || []
+      }, index);
     },
 
     // 展开/折叠某条 AI 消息的思考过程
@@ -713,12 +735,14 @@ export default {
     // 不再先调 insert_message 换 task_id，用户消息由后端在收到 ChatMsg 后落库
     async sendMessage() {
       const content = this.inputText?.trim();
-      if (!content || this.isStreaming) return;
+      if (!content) return;
 
-      if (!this.userInfo || !this.userInfo.id) {
-        uni.showToast({ title: '请先登录', icon: 'none' });
+      if (this.isStreaming) {
+        uni.showToast({ title: 'AI 正在回复，请稍候', icon: 'none' });
         return;
       }
+
+      if (!this.ensureLogin({ redirect: true })) return;
 
       // 检查会话ID (如果没有，先创建新会话)
       if (!this.currentSessionId) {
@@ -733,11 +757,18 @@ export default {
         .map(item => (item && (item.url || item.filename)) || '')
         .filter(Boolean);
 
+      const now = new Date();
+      const dateLabel = this.dateLabelOf(now);
+
       // 1. 先加用户消息到列表
       const userMsg = {
         role: "user",
         content: content,
-        created_time: this.formatMessageTime(new Date()),
+        created_time: this.formatMessageTime(now),
+        _dateLabel: dateLabel,
+        // 供「重新生成」复用上一轮提问的参数
+        _newsIds: newsIds,
+        _files: files,
         llm_refer_data: llm_refer_data,
         isReferencesExpanded: false
       };
@@ -753,8 +784,11 @@ export default {
         reasoning: "",
         isReasoningExpanded: false,
         reasoningMs: 0,
+        // 点赞 / 点踩：'' | 'like' | 'dislike'，互斥单选
+        feedback: '',
+        _dateLabel: dateLabel,
         llm_refer_data: [],
-        created_time: this.formatMessageTime(new Date()),
+        created_time: this.formatMessageTime(now),
         suggestions: [],
         sources: []
       };
@@ -768,7 +802,6 @@ export default {
       console.log("发送消息:", content, "session_id:", this.currentSessionId || 0, "关联新闻ID:", newsIds, "附件:", files);
 
       this.inputText = "";
-      this.textareaHeight = 50;
       this.selectedNewsIds = [];
       this.attachedFiles = [];
 
@@ -797,17 +830,161 @@ export default {
         .filter(item => this.selectedNewsIds.includes(item.id))
         .map(item => item.title);
     },
+
+    // ---- 消息操作行 ----
+
+    // 该条 AI 回复是否展示操作行：内容已产出、没失败，且不是正在流式输出的最后一条
+    canShowActions(msg, index) {
+      if (!msg || msg.role !== 'assistant') return false;
+      if (!msg.content || msg._failed) return false;
+      return !(this.isStreaming && index === this.messageList.length - 1);
+    },
+
+    // 复制整条回复
+    copyMessage(msg) {
+      const text = (msg && msg.content) || '';
+      if (!text) {
+        uni.showToast({ title: '暂无可复制内容', icon: 'none' });
+        return;
+      }
+      uni.setClipboardData({
+        data: text,
+        success: () => uni.showToast({ title: '已复制', icon: 'none' }),
+        fail: () => uni.showToast({ title: '复制失败，请重试', icon: 'none' })
+      });
+    },
+
+    // 点赞 / 点踩：互斥单选，再次点击取消
+    toggleFeedback(index, type) {
+      const msg = this.messageList[index];
+      if (!msg || msg.role !== 'assistant') return;
+      const next = msg.feedback === type ? '' : type;
+      this.$set(msg, 'feedback', next);
+      // TODO: 反馈上报接口就绪后在这里提交（type: like / dislike / ''）
+    },
+
+    // 重新生成：基于该条回复对应的上一轮提问再问一次，原回复保留、新回复追加在末尾
+    async regenerateMessage(index) {
+      if (this.isStreaming) {
+        uni.showToast({ title: 'AI 正在回复，请稍候', icon: 'none' });
+        return;
+      }
+
+      const msg = this.messageList[index];
+      if (!msg || msg.role !== 'assistant') return;
+
+      // 往回找这条回复对应的提问
+      let userIndex = -1;
+      for (let i = index - 1; i >= 0; i--) {
+        if (this.messageList[i].role === 'user') {
+          userIndex = i;
+          break;
+        }
+      }
+      if (userIndex < 0) {
+        uni.showToast({ title: '没有可重新生成的提问', icon: 'none' });
+        return;
+      }
+
+      if (!this.ensureLogin({ redirect: true })) return;
+      if (!this.currentSessionId) {
+        await this.createAndInitNewSession();
+        if (!this.currentSessionId) return;
+      }
+
+      const userMsg = this.messageList[userIndex];
+      const aiMsgIndex = this.messageList.length;
+      this.$set(this.messageList, aiMsgIndex, {
+        role: 'assistant',
+        content: '',
+        renderedHtml: '',
+        reasoning: '',
+        isReasoningExpanded: false,
+        reasoningMs: 0,
+        feedback: '',
+        _dateLabel: userMsg._dateLabel || this.dateLabelOf(new Date()),
+        llm_refer_data: [],
+        created_time: this.formatMessageTime(new Date()),
+        suggestions: [],
+        sources: []
+      });
+
+      this.isStreaming = true;
+      this.statusText = '正在连接...';
+      this.scrollToBottom();
+
+      this.startChatStream({
+        query: userMsg.content,
+        user_id: parseInt(this.userInfo.id),
+        session_id: this.currentSessionId || 0,
+        news_ids: userMsg._newsIds || [],
+        files: userMsg._files || []
+      }, aiMsgIndex);
+    },
+
+    // ---- 时间分组 ----
+
+    // 消息流按天分组：返回该条消息前面是否需要插入分组时间
+    showDateDivider(index) {
+      const msg = this.messageList[index];
+      if (!msg || !msg._dateLabel) return false;
+      if (index === 0) return true;
+      return msg._dateLabel !== this.messageList[index - 1]._dateLabel;
+    },
+
+    // 消息分组标签：M月D日
+    dateLabelOf(value) {
+      const date = this.parseMessageTime(value);
+      if (!date) return '';
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    },
+
+    // 会话列表的相对时间：当天 HH:mm，昨天「昨天」，更早 M月D日
+    formatSessionTime(value) {
+      const date = this.parseMessageTime(value);
+      if (!date) return '';
+
+      const pad = n => String(n).padStart(2, '0');
+      const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const diffDays = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+
+      if (diffDays <= 0) return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      if (diffDays === 1) return '昨天';
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    },
     async loadUserInfo() {
       const userInfo = getUserInfo();
       console.log('用户信息：', userInfo);
       if (userInfo) {
         this.nikeName = userInfo.nickname;
-        this.avatar = userInfo.avatar || '/static/images/default-avatar.png';
+        // 用户头像：优先用登录信息里的头像，没有就用项目内的默认头像
+        this.avatar = userInfo.avatar || '/static/default-avatar.png';
         this.userInfo = userInfo;
       } else {
-        // 未登录
-        // uni.redirectTo({ url: '/pages/login/login' });
+        this.userInfo = null;
       }
+    },
+
+    // 是否已登录：userInfo 和 token 必须都在。
+    // 只有 userInfo 没有 token 是「半登录」脏状态（退出登录 / 上传 401 只清了 token 就会这样），
+    // 这时候发请求后端一定回 401「未登录」，所以本地先拦住。
+    // 本页所有接口都挂 Depends(get_current_user)，没登录留在页面上什么也做不了，直接回登录页。
+    ensureLogin(options = {}) {
+      const token = uni.getStorageSync('token');
+      if (this.userInfo && this.userInfo.id && token) return true;
+
+      // 半登录态顺手清干净，别让残留的 userInfo 继续误导其它页面
+      clearLoginStatus();
+
+      if (!options.silent) {
+        uni.showToast({ title: '请先登录', icon: 'none' });
+      }
+
+      setTimeout(() => {
+        uni.reLaunch({ url: '/pages/login/login' });
+      }, options.silent ? 0 : 600);
+
+      return false;
     },
     scrollToBottom() {
       // 使用 $nextTick 确保 DOM 更新后再滚动
@@ -822,14 +999,15 @@ export default {
       // 正在流式接收回答时不要把列表刷掉（例如从其他页面切回来触发 onShow）
       if (this.isStreaming) return;
 
-      if (!this.userInfo || !this.userInfo.id) {
-        // 如果未登录，可能无法获取会话，视情况而定
-        console.log('用户未登录，跳过会话初始化');
+      // 没登录 / 半登录态就别发请求了：后端每个 session 接口都挂 Depends(get_current_user)，
+      // 发了也只会拿到 401「未登录」。ensureLogin 会顺手清掉脏登录态并回登录页
+      if (!this.ensureLogin({ silent: true })) {
+        console.log('未登录或缺少 token，跳过会话初始化');
         return;
       }
 
       try {
-        uni.showLoading({ title: '加载中...' });
+        showLoading('加载中...');
 
         // 1. 获取所有会话
         const res = await request({
@@ -843,21 +1021,16 @@ export default {
 
           if (sessions && sessions.length > 0) {
             // 2. 按 update_time 降序排列，取第一个（最新的）
-            // 注意：确保后端返回的时间格式能被 Date 解析，通常是 ISO 字符串或时间戳
-            sessions.sort((a, b) => {
-              const timeA = (this.parseMessageTime(a.update_time || a.created_time) || new Date(0)).getTime();
-              const timeB = (this.parseMessageTime(b.update_time || b.created_time) || new Date(0)).getTime();
-              return timeB - timeA; // 降序
-            });
+            const sorted = this.sortSessionsByTime(sessions);
 
-            const latestSession = sessions[0];
+            const latestSession = sorted[0];
             console.log('加载最新会话:', latestSession);
 
             // 3. 设置当前会话 ID 并加载消息
             this.currentSessionId = latestSession.id;
 
             // 更新侧边栏数据（可选，为了保持状态一致）
-            this.sessionList = sessions;
+            this.sessionList = sorted;
             this.groupSessionsByDate(this.sessionList);
 
             // 4. 加载该会话的消息
@@ -874,11 +1047,13 @@ export default {
         }
       } catch (err) {
         console.error('初始化会话失败:', err);
-        // 异常情况下，也尝试创建新会话，保证用户可用
+        // 401 已经由 request.js 统一提示并跳登录页了，这里再补一次「创建新会话」
+        // 只会又撞一次 401，白刷两条错误日志
+        if (err && err.isAuthError) return;
+        // 其它异常（网络抖动等）降级创建新会话，保证用户可用
         await this.createAndInitNewSession();
       } finally {
-        uni.hideLoading();
-        this.newSessionWindowLoading = true; // 恢复按钮状态
+        hideLoading();
       }
     },
 
@@ -906,17 +1081,16 @@ export default {
         }
       } catch (err) {
         console.error('Load Session Messages Error:', err);
-        uni.showToast({ title: '网络请求失败', icon: 'none' });
+        if (!(err && err.isAuthError)) {
+          uni.showToast({ title: '网络请求失败', icon: 'none' });
+        }
         this.messageList = [];
       }
     },
 
     // 【修改】创建新会话并初始化（不直接操作 messageList，由调用者决定）
     async createAndInitNewSession() {
-      if (!this.userInfo || !this.userInfo.id) {
-        uni.showToast({ title: '请先登录', icon: 'none' });
-        return;
-      }
+      if (!this.ensureLogin({ redirect: true })) return;
 
       try {
         const res = await request({
@@ -934,32 +1108,43 @@ export default {
         }
       } catch (err) {
         console.error('New Session Error:', err);
-        uni.showToast({ title: '网络请求失败', icon: 'none' });
+        // 401 已由 request.js 统一处理，这里不要再叠一条「网络请求失败」误导排查
+        if (!(err && err.isAuthError)) {
+          uni.showToast({ title: '网络请求失败', icon: 'none' });
+        }
       }
     },
     async newSession() {
-      this.closeChatStream();
-      this.newSessionWindowLoading = false;
-      this.messageList = [];
-      this.currentSessionId = null;
+      // 防连点：连点两次会创建两个空会话
+      if (this.creatingSession) return;
+      this.creatingSession = true;
+      try {
+        this.closeChatStream();
+        this.messageList = [];
+        this.currentSessionId = null;
 
-      await this.createAndInitNewSession();
-
-      this.newSessionWindowLoading = true;
+        await this.createAndInitNewSession();
+      } finally {
+        this.creatingSession = false;
+      }
     },
+
+    // 抽屉里的「新建」：开空白会话并收起抽屉
+    async createSessionFromDrawer() {
+      await this.newSession();
+      this.closeSidebar();
+    },
+
     async getSessions() {
       if (this.showSidebar) {
         this.showSidebar = false;
         return;
       }
 
-      if (!this.userInfo || !this.userInfo.id) {
-        uni.showToast({ title: '请先登录', icon: 'none' });
-        return;
-      }
+      if (!this.ensureLogin({ redirect: true })) return;
 
       try {
-        uni.showLoading({ title: '加载中...' });
+        showLoading('加载中...');
 
         const res = await request({
           url: '/session/get_sessions',
@@ -968,7 +1153,7 @@ export default {
         });
 
         if (res.code === 200 || res.code === '200') {
-          this.sessionList = res.data || [];
+          this.sessionList = this.sortSessionsByTime(res.data || []);
           this.groupSessionsByDate(this.sessionList);
           this.showSidebar = true;
         } else {
@@ -976,11 +1161,22 @@ export default {
         }
 
       } catch (err) {
-        console.error('Get Sessions Error:', err.data);
-        uni.showToast({ title: '网络请求失败', icon: 'none' });
+        console.error('Get Sessions Error:', err);
+        if (!(err && err.isAuthError)) {
+          uni.showToast({ title: '网络请求失败', icon: 'none' });
+        }
       } finally {
-        uni.hideLoading();
+        hideLoading();
       }
+    },
+
+    // 会话按更新时间倒序：分组依赖顺序，接口不保证有序时先自己排一遍
+    sortSessionsByTime(list) {
+      return (list || []).slice().sort((a, b) => {
+        const timeA = (this.parseMessageTime(a.update_time || a.created_time) || new Date(0)).getTime();
+        const timeB = (this.parseMessageTime(b.update_time || b.created_time) || new Date(0)).getTime();
+        return timeB - timeA;
+      });
     },
 
     // 按日期分组会话
@@ -994,50 +1190,13 @@ export default {
       let lastDateLabel = '';
 
       list.forEach(item => {
-        const dateObj = this.parseMessageTime(item.update_time || item.created_time);
-        if (!dateObj) {
-          // 时间解析不出来时归到“更早”，不要让分组整体错位
-          const fallbackLabel = '更早';
-          if (fallbackLabel !== lastDateLabel) {
-            groups.push({ label: fallbackLabel, items: [item] });
-            lastDateLabel = fallbackLabel;
-          } else {
-            groups[groups.length - 1].items.push(item);
-          }
-          return;
-        }
+        // 分组标签统一用「M月D日」，和列表项里的相对时间（10:34 / 昨天 / 11月23日）互补
+        const label = this.dateLabelOf(item.update_time || item.created_time) || '更早';
 
-        // 获取今天的日期对象（清零时间部分以便比较）
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const targetDate = new Date(dateObj);
-        targetDate.setHours(0, 0, 0, 0);
-
-        let label = '';
-        const diffTime = today.getTime() - targetDate.getTime();
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays <= 0) {
-          label = '今天';
-        } else if (diffDays === 1) {
-          label = '昨天';
-        } else {
-          // 格式化为 MM月DD日
-          const month = dateObj.getMonth() + 1;
-          const day = dateObj.getDate();
-          label = `${month}月${day}日`;
-        }
-
-        // 如果当前标签与上一个不同，创建新组
         if (label !== lastDateLabel) {
-          groups.push({
-            label: label,
-            items: [item]
-          });
+          groups.push({ label: label, items: [item] });
           lastDateLabel = label;
         } else {
-          // 否则加入当前组
           groups[groups.length - 1].items.push(item);
         }
       });
@@ -1050,40 +1209,104 @@ export default {
     },
 
     // --- 点击某个会话 ---
-    selectSession(session) {
-      this.closeChatStream();
-      this.currentSessionId = session.id;
-      console.log('选中会话:', session);
-      // TODO: 这里可以添加跳转逻辑或加载该会话的历史消息
-      // 例如: this.loadSessionMessages(session.id);
+    async selectSession(session) {
+      if (!session) return;
 
-      if (!this.userInfo || !this.userInfo.id) {
-        uni.showToast({ title: '请先登录', icon: 'none' });
+      // 点当前会话：只收起抽屉，不重载（避免打断正在流式输出的回答）
+      if (session.id === this.currentSessionId) {
+        this.closeSidebar();
         return;
       }
 
-      try {
-        uni.showLoading({ title: '加载中...' });
+      this.closeSidebar();
 
-        request({
+      if (!this.ensureLogin({ redirect: true })) return;
+
+      this.closeChatStream();
+      this.currentSessionId = session.id;
+      console.log('选中会话:', session);
+
+      showLoading('加载中...');
+      try {
+        const res = await request({
           url: '/chatMessage/get_by_session_id',
           method: "GET",
           data: { session_id: session.id }
-        }).then(res => {
-          if (res.code === 200 || res.code === '200') {
-            console.log('会话消息返回：', res);
-            this.messageList = this.decorateHistoryMessages(res.data || []);
-          } else {
-            uni.showToast({ title: res.msg || '拉取会话消息失败', icon: 'none' });
-          }
-        })
+        });
+        if (res.code === 200 || res.code === '200') {
+          this.messageList = this.decorateHistoryMessages(res.data || []);
+          this.scrollToBottom();
+        } else {
+          uni.showToast({ title: res.msg || '拉取会话消息失败', icon: 'none' });
+        }
       } catch (err) {
         console.error('Get Session Messages Error:', err);
+        if (!(err && err.isAuthError)) {
+          uni.showToast({ title: '网络请求失败', icon: 'none' });
+        }
+      } finally {
+        hideLoading();
       }
-      finally {
-        uni.hideLoading();
+    },
+
+    // --- 会话项「…」菜单 ---
+    openSessionMenu(session) {
+      uni.showActionSheet({
+        itemList: ['删除会话'],
+        success: res => {
+          if (res.tapIndex === 0) this.deleteSession(session);
+        }
+      });
+    },
+
+    // 删除会话：/delete_sessions（DELETE，body: { session_ids: [] }）
+    async deleteSession(session) {
+      if (!session || !session.id) return;
+
+      const topic = session.session_topic || '未命名会话';
+      const confirmed = await new Promise(resolve => {
+        uni.showModal({
+          title: '删除会话',
+          content: `确定删除「${topic}」吗？删除后不可恢复。`,
+          confirmText: '删除',
+          confirmColor: '#E5484D',
+          cancelText: '取消',
+          success: res => resolve(!!res.confirm),
+          fail: () => resolve(false)
+        });
+      });
+      if (!confirmed) return;
+
+      showLoading('删除中...');
+      try {
+        const res = await request({
+          url: '/delete_sessions',
+          method: 'DELETE',
+          data: { session_ids: [session.id] }
+        });
+
+        if (res && (res.code === 200 || res.code === '200')) {
+          this.sessionList = (this.sessionList || []).filter(item => item.id !== session.id);
+          this.groupSessionsByDate(this.sessionList);
+
+          // 删掉的是当前会话：回到空白新会话
+          if (this.currentSessionId === session.id) {
+            this.closeChatStream();
+            this.currentSessionId = null;
+            this.messageList = [];
+          }
+          uni.showToast({ title: '已删除', icon: 'none' });
+        } else {
+          uni.showToast({ title: (res && res.msg) || '删除失败', icon: 'none' });
+        }
+      } catch (err) {
+        console.error('Delete Session Error:', err);
+        if (!(err && err.isAuthError)) {
+          uni.showToast({ title: '删除失败', icon: 'none' });
+        }
+      } finally {
+        hideLoading();
       }
-      this.closeSidebar();
     },
     // 把后端返回的时间安全地解析成 Date。
     // 后端给的是 Python 的 ISO 字符串，形如 2026-11-24T10:34:55.171674（6 位微秒，无时区）。
@@ -1139,16 +1362,19 @@ export default {
       return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hm}`;
     },
 
-    // 历史消息统一补上格式化后的展示时间（服务端返回的是原始 ISO 字符串）
+    // 历史消息统一补上格式化后的展示时间 + 分组日期（服务端返回的是原始 ISO 字符串）
     decorateHistoryMessages(list) {
       return this.dedupeAdjacentUserMessages(list).map(m => {
         if (!m) return m;
+        const rawTime = m.created_time || m.created_at;
         const decorated = {
           ...m,
-          created_time: this.formatMessageTime(m.created_time || m.created_at)
+          created_time: this.formatMessageTime(rawTime),
+          _dateLabel: this.dateLabelOf(rawTime)
         };
         if (m.role === 'assistant') {
           decorated.renderedHtml = this.renderMarkdownToHtml(m.content || '');
+          decorated.feedback = '';
         }
         return decorated;
       });

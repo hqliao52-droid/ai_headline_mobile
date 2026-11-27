@@ -1,4 +1,6 @@
 import config from './config.js';
+import { handleAuthExpired } from './auth.js';
+import { showLoading, hideLoading } from './loading.js';
 
 /**
  * 构造上传接口的鉴权 header
@@ -13,11 +15,14 @@ function buildAuthHeader(token) {
 }
 
 /**
- * 鉴权失败（401）统一处理：清掉失效 token 并提示重新登录
+ * 鉴权失败（401）统一处理：清掉登录态并回登录页
+ *
+ * 之前这里只 removeStorageSync('token')，userInfo 留在本地，于是留下「有用户信息、
+ * 没凭证」的半登录态：页面以为还登录着，继续发请求，后端全部回 401「未登录」。
+ * 现在统一交给 handleAuthExpired（token 和 userInfo 一起清 + 跳登录页）。
  */
 function handleUnauthorized() {
-    uni.removeStorageSync('token');
-    uni.showToast({ title: '登录已失效，请重新登录', icon: 'none' });
+    handleAuthExpired('登录已失效，请重新登录');
 }
 
 /**
@@ -64,7 +69,7 @@ export async function uploadFiles() {
  */
 function uploadSingleFile(filePath) {
     return new Promise((resolve, reject) => {
-        uni.showLoading({ title: '上传中...' })
+        showLoading('上传中...')
 
         uni.uploadFile({
             url: config.baseURL + '/file/upload_file',
@@ -74,6 +79,13 @@ function uploadSingleFile(filePath) {
             header: buildAuthHeader(),
             method: 'POST',
             success: (uploadRes) => {
+                // 401 和其它接口一样走统一处理（清登录态 + 回登录页），
+                // 不要当成普通业务失败只弹一句 toast，否则用户会一直停留在半登录态
+                if (uploadRes.statusCode === 401) {
+                    handleUnauthorized()
+                    reject('未登录或登录已失效')
+                    return
+                }
                 try {
                     const data = JSON.parse(uploadRes.data)
                     if (data.code === 200 || data.code === '200') {
@@ -95,7 +107,7 @@ function uploadSingleFile(filePath) {
                 reject('上传失败')
             },
             complete: () => {
-                uni.hideLoading()
+                hideLoading()
             }
         })
     })
@@ -121,7 +133,7 @@ export async function uploadSingleSpeciallyFile(filePath, token) {
         //   return
         // }
 
-        uni.showLoading({ title: '上传中...' })
+        showLoading('上传中...')
 
         uni.uploadFile({
             url: config.baseURL + '/file/upload_file',
@@ -155,7 +167,7 @@ export async function uploadSingleSpeciallyFile(filePath, token) {
                 reject('上传失败')
             },
             complete: () => {
-                uni.hideLoading()
+                hideLoading()
             }
         })
     })

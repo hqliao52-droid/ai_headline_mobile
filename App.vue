@@ -1,10 +1,22 @@
 <script>
+	import { clearLoginStatus } from '@/utils/user.js';
+
 	export default {
 		onLaunch: function() {
 			console.log('App Launch')
-			
-			// 检查本地是否有 token
+
+			// 启动时先修一次登录态：token 和 userInfo 必须同时存在或同时不存在。
+			// 只清 token 不清 userInfo 会留下「有用户信息、没凭证」的半登录态，
+			// 页面看到 userInfo 还在就继续发鉴权请求，后端一律回 401「未登录」，
+			// 而用户完全不知道发生了什么。这里在启动时一次性把脏状态抹掉。
 			const token = uni.getStorageSync('token');
+			const userInfo = uni.getStorageSync('userInfo');
+			if (!token && userInfo) {
+				console.warn('[auth] 发现残留的用户信息但没有 token，已清除，请重新登录');
+				clearLoginStatus();
+			}
+
+			// 检查本地是否有 token
 			if (token) {
 				// 如果已登录，直接跳转到首页 (TabBar 页面)
 				uni.switchTab({
